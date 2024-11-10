@@ -21,7 +21,8 @@ Then you are good to! You have to create an input array and retrieve your calcul
 
 ```python3
 input_array = np.array([...]) #write in the relevant numbers
-result = trained_emu.get_Pl(input_array)
+bias_array = np.array([...])
+result = trained_emu.get_Pl(input_array, bias_array)
 ```
 
 For a more detailed explanation, check the tutorial in the `notebooks` folder, which also shows a comparison with the standard `calculations.
