@@ -1,5 +1,4 @@
 # jaxeffort
-[![arXiv](https://img.shields.io/badge/arXiv-2307.14339-b31b1b.svg)](https://arxiv.org/abs/2307.14339)
 
 Repo containing the jaxeffort emulator.
 
