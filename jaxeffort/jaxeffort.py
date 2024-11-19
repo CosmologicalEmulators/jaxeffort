@@ -81,12 +81,16 @@ class MultipoleEmulators:
     def get_Pl(self, cosmology, biases):
         b1, b2, b3, bs, alpha0, alpha2, alpha4, alpha6 = biases
 
-        b11 = np.array([1, b1, b1**2])
-        bloop = np.array([b2, b1*b2, b2**2, bs, b1*bs, b2*bs, bs**2, b3, b1*b3])
-        bct = np.array([alpha0, alpha2, alpha4, alpha6])
+        b11 = jnp.asarray([1., b1, b1**2])
+        bloop = jnp.asarray([b2, b1*b2, b2**2, bs, b1*bs, b2*bs, bs**2, b3, b1*b3])
+        bct = jnp.asarray([alpha0, alpha2, alpha4, alpha6])
 
         P11_output, Ploop_output, Pct_output = self.get_multipole_outputs(cosmology)
         return jnp.dot(P11_output,b11)+jnp.dot(Ploop_output,bloop)+jnp.dot(Pct_output,bct)
+
+    def get_Pl_no_bias(self, cosmology):
+        P11_output, Ploop_output, Pct_output = self.get_multipole_outputs(cosmology)
+        return jnp.hstack((P11_output, Ploop_output, Pct_output))
 
 class MultipoleNoiseEmulator:
     def __init__(self, multipole_emulator: MultipoleEmulators, noise_emulator: MLP):
@@ -102,10 +106,10 @@ class MultipoleNoiseEmulator:
 
     def get_Pl(self, cosmology, biases):
         b1, b2, b3, bs, alpha0, alpha2, alpha4, alpha6, sn, sn2, sn4 = biases
-        Pl_output = self.multipole_emulator.get_Pl(cosmology, np.array([b1, b2, b3, bs, alpha0, alpha2, alpha4, alpha6]))
+        Pl_output = self.multipole_emulator.get_Pl(cosmology, biases[0:8])
         Noise_output = self.noise_emulator.get_Pl(cosmology)
 
-        return Pl_output + jnp.dot(Noise_output, np.array([sn, sn2, sn4]))
+        return Pl_output + jnp.dot(Noise_output, biases[8:])
 
 
 def get_flax_params(nn_dict, weights):
