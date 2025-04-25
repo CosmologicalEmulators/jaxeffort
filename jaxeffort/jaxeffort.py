@@ -111,6 +111,11 @@ class MultipoleNoiseEmulator:
 
         return Pl_output + jnp.dot(Noise_output, biases[8:])
 
+    def get_Pl_no_bias(self, cosmology):
+        P11_output, Ploop_output, Pct_output = self.multipole_emulator.get_multipole_outputs(cosmology)
+        Noise_output = self.noise_emulator.get_Pl(cosmology)
+        return jnp.hstack((P11_output, Ploop_output, Pct_output, Noise_output))
+
 
 def get_flax_params(nn_dict, weights):
     in_array, out_array = get_in_out_arrays(nn_dict)
