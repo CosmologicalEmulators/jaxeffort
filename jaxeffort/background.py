@@ -14,15 +14,15 @@ def get_y(m_nu, a, kB=8.617342e-5, T_nu=0.71611 * 2.7255):
 @jax.jit
 def F(y):
     def integrand(x):
-        return x**2 * jnp.sqrt(x**2 + y**2) / (1 + jnp.exp(x))
-    result, _ = quadgk(integrand, [0.0, jnp.inf], epsrel=1e-12)
+        return x**2 * np.sqrt(x**2 + y**2) / (1 + np.exp(x))
+    result, _ = quadgk(integrand, [0.0, np.inf], epsrel=1e-12)
     return result
 
 @jax.jit
 def dFdy(y):
     def integrand(x):
-        return x**2 / ((1 + jnp.exp(x)) * jnp.sqrt(x**2 + y**2))
-    result, _ = quadgk(integrand, [0.0, jnp.inf], epsrel=1e-12)
+        return x**2 / ((1 + np.exp(x)) * np.sqrt(x**2 + y**2))
+    result, _ = quadgk(integrand, [0.0, np.inf], epsrel=1e-12)
     return result * y
 
 _min_y = float(get_y(0.0, 0.0))    # lower bound
