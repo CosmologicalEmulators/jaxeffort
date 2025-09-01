@@ -491,16 +491,19 @@ def Ωma_from_cosmo(a: Union[float, jnp.ndarray],
 
 def r̃_z_single(z_val, Ωcb0, h, mν, w0, wa, n_points=500):
     
-    from jax.scipy.integrate import trapezoid
-
     def integrand(z_prime):
         return 1.0 / E_z(z_prime, Ωcb0, h, mν=mν, w0=w0, wa=wa)
 
     # Use JAX-compatible conditional
     def integrate_nonzero(_):
-        z_points = jnp.linspace(1e-12, z_val, n_points)
-        integrand_values = integrand(z_points)
-        return trapezoid(integrand_values, z_points)
+        result, info = quadax.quadgk(
+            integrand, 
+            [0.0, z_val], 
+            epsabs=1e-10, 
+            epsrel=1e-10,
+            order=31
+        )
+        return result
 
     result = jax.lax.cond(
         jnp.abs(z_val) < 1e-12,  # z essentially zero
