@@ -9,6 +9,8 @@ readme = "README.md"
 python = "^3.9"
 flax = "^0.10.0"
 jax = "^0.4.30"
+quadax = "^0.2.9"
+interpax = "^0.3.9"
 
 
 [build-system]
