@@ -13,10 +13,10 @@ import sys
 
 __all__ = [
     'W0WaCDMCosmology',
-    'a_z', 'E_a', 'E_z', 'dlogEdloga', 'Ωma', 
+    'a_z', 'E_a', 'E_z', 'dlogEdloga', 'Ωma',
     'D_z', 'f_z', 'D_f_z',
     'D_z_from_cosmo', 'f_z_from_cosmo', 'D_f_z_from_cosmo',
-    'r_z', 'dA_z', 'dL_z', 'ρc_z', 'Ωtot_z'
+    'r_z', 'dA_z', 'ρc_z', 'Ωtot_z'
 ]
 
 class W0WaCDMCosmology(NamedTuple):
@@ -31,22 +31,22 @@ class W0WaCDMCosmology(NamedTuple):
 
 @jax.jit
 def a_z(z):
-    
+
     return 1.0 / (1.0 + z)
 
 @jax.jit
 def rhoDE_a(a, w0, wa):
-    
+
     return jnp.power(a, -3.0 * (1.0 + w0 + wa)) * jnp.exp(3.0 * wa * (a - 1.0))
 
 @jax.jit
 def rhoDE_z(z, w0, wa):
-    
+
     return jnp.power(1.0 + z, 3.0 * (1.0 + w0 + wa)) * jnp.exp(-3.0 * wa * z / (1.0 + z))
 
 @jax.jit
 def drhoDE_da(a, w0, wa):
-    
+
     return 3.0 * (-(1.0 + w0 + wa) / a + wa) * rhoDE_a(a, w0, wa)
 
 @jax.jit
@@ -61,7 +61,7 @@ def gety(m_nu: Union[float, jnp.ndarray],
     return m_nu * a / (kB * T_nu)
 
 def F(y: Union[float, jnp.ndarray]) -> Union[float, jnp.ndarray]:
-    
+
     def singleF(y_val):
         def integrand(x):
             return x**2 * jnp.sqrt(x**2 + y_val**2) / (jnp.exp(x) + 1.0)
@@ -77,7 +77,7 @@ def F(y: Union[float, jnp.ndarray]) -> Union[float, jnp.ndarray]:
         return jax.vmap(singleF)(y)
 
 def dFdy(y: Union[float, jnp.ndarray]) -> Union[float, jnp.ndarray]:
-    
+
     def singledFdy(y_val):
         def integrand(x):
             sqrt_term = jnp.sqrt(x**2 + y_val**2)
@@ -101,7 +101,7 @@ _interpolants_initialized = False
 
 
 def initialize_interpolants():
-    
+
     global _F_interpolator, _dFdy_interpolator, _interpolants_initialized
 
     if _interpolants_initialized:
@@ -110,36 +110,36 @@ def initialize_interpolants():
     try:
         # Implement Effort.jl's dual-grid approach
         print("Initializing neutrino interpolants with dual-grid strategy...")
-        
+
         # Grid parameters following Effort.jl specifications
         min_y = 0.001  # Minimum y value
         max_y = 1000.0  # Maximum y value for extended range
-        
+
         # F_interpolant grid: 100 points (min_y to 100) + 1,000 points (100.1 to max_y)
         # Full Effort.jl specification
         print("Creating F_interpolant grid...")
         F_y_low = jnp.logspace(jnp.log10(min_y), jnp.log10(100.0), 100)
         F_y_high = jnp.logspace(jnp.log10(100.1), jnp.log10(max_y), 1000)
         F_y_grid = jnp.concatenate([F_y_low, F_y_high])
-        
+
         # dFdy_interpolant grid: 10,000 points (min_y to 10) + 10,000 points (10.1 to max_y)
-        # Full Effort.jl specification  
+        # Full Effort.jl specification
         print("Creating dFdy_interpolant grid...")
         dFdy_y_low = jnp.logspace(jnp.log10(min_y), jnp.log10(10.0), 10000)
         dFdy_y_high = jnp.logspace(jnp.log10(10.1), jnp.log10(max_y), 10000)
         dFdy_y_grid = jnp.concatenate([dFdy_y_low, dFdy_y_high])
-        
+
         print(f"F grid: {len(F_y_grid)} points from {F_y_grid[0]:.6f} to {F_y_grid[-1]:.1f}")
         print(f"dFdy grid: {len(dFdy_y_grid)} points from {dFdy_y_grid[0]:.6f} to {dFdy_y_grid[-1]:.1f}")
-        
+
         # Compute F values for F grid using JAX vectorization
         print("Computing F values...")
         F_values = F(F_y_grid)  # F function should handle arrays
-        
+
         # Compute dFdy values for dFdy grid using JAX vectorization
         print("Computing dFdy values...")
         dFdy_values = dFdy(dFdy_y_grid)  # dFdy function should handle arrays
-        
+
         # Validate computed values
         if not jnp.all(jnp.isfinite(F_values)):
             raise ValueError("F values contain non-finite entries")
@@ -149,7 +149,7 @@ def initialize_interpolants():
             raise ValueError("F values must be positive")
         if not jnp.all(dFdy_values >= 0):
             raise ValueError("dFdy values must be non-negative")
-        
+
         print("Creating Akima interpolators...")
         # Create separate Akima interpolators with their respective optimized grids
         _F_interpolator = interpax.Akima1DInterpolator(F_y_grid, F_values)
@@ -165,7 +165,7 @@ def initialize_interpolants():
 
 @jax.jit
 def F_interpolant(y: Union[float, jnp.ndarray]) -> Union[float, jnp.ndarray]:
-    
+
     global _F_interpolator
 
     if _F_interpolator is None:
@@ -181,7 +181,7 @@ def F_interpolant(y: Union[float, jnp.ndarray]) -> Union[float, jnp.ndarray]:
 
 @jax.jit
 def dFdy_interpolant(y: Union[float, jnp.ndarray]) -> Union[float, jnp.ndarray]:
-    
+
     global _dFdy_interpolator
 
     if _dFdy_interpolator is None:
@@ -203,17 +203,17 @@ def ΩνE2(a: Union[float, jnp.ndarray],
           N_eff: Union[float, jnp.ndarray]) -> Union[float, jnp.ndarray]:
     """
     Neutrino energy density parameter following Effort.jl exactly.
-    
+
     Formula: 15/π^4 * Γν^4 * Ωγ0/a^4 * ΣF(yi)
     where Γν = (4/11)^(1/3) * (Neff/3)^(1/4)
     """
     # Physics constants (exact match with Effort.jl)
     kB = 8.617342e-5  # Boltzmann constant in eV/K
     T_nu = 0.71611 * 2.7255  # Neutrino temperature in K (matches Effort.jl)
-    
+
     # Gamma factor (exact match with Effort.jl)
     Gamma_nu = jnp.power(4.0 / 11.0, 1.0/3.0) * jnp.power(N_eff / 3.0, 1.0/4.0)
-    
+
     # Handle both single mass and array of masses
     m_nu_array = jnp.asarray(m_nu)
     if m_nu_array.ndim == 0:
@@ -225,13 +225,13 @@ def ΩνE2(a: Union[float, jnp.ndarray],
         def compute_F_for_mass(mass):
             y = mass * a / (kB * T_nu)
             return F_interpolant(y)
-        
+
         F_values = jax.vmap(compute_F_for_mass)(m_nu_array)
         sum_interpolant = jnp.sum(F_values)
-    
+
     # Exact Effort.jl formula: 15/π^4 * Γν^4 * Ωγ0/a^4 * sum_interpolant
     result = (15.0 / jnp.pi**4) * jnp.power(Gamma_nu, 4.0) * Ωγ0 * jnp.power(a, -4.0) * sum_interpolant
-    
+
     return result
 
 
@@ -240,7 +240,7 @@ def dΩνE2da(a: Union[float, jnp.ndarray],
              Ωγ0: Union[float, jnp.ndarray],
              m_nu: Union[float, jnp.ndarray],
              N_eff: Union[float, jnp.ndarray]) -> Union[float, jnp.ndarray]:
-    
+
     # Use JAX autodiff for guaranteed consistency
     def energydensity_for_diff(a_val):
         return ΩνE2(a_val, Ωγ0, m_nu, N_eff)
@@ -314,7 +314,7 @@ def E_z(z: Union[float, jnp.ndarray],
          mν: Union[float, jnp.ndarray] = 0.0,
          w0: Union[float, jnp.ndarray] = -1.0,
          wa: Union[float, jnp.ndarray] = 0.0) -> Union[float, jnp.ndarray]:
-    
+
     # Convert redshift to scale factor
     a = a_z(z)
 
@@ -324,7 +324,7 @@ def E_z(z: Union[float, jnp.ndarray],
 @jax.jit
 def Ez_from_cosmo(z: Union[float, jnp.ndarray],
                     cosmo: W0WaCDMCosmology) -> Union[float, jnp.ndarray]:
-    
+
     # Extract parameters from cosmology struct
     Ωcb0 = cosmo.omega_c + cosmo.omega_b
 
@@ -338,7 +338,7 @@ def dlogEdloga(a: Union[float, jnp.ndarray],
                 mν: Union[float, jnp.ndarray] = 0.0,
                 w0: Union[float, jnp.ndarray] = -1.0,
                 wa: Union[float, jnp.ndarray] = 0.0) -> Union[float, jnp.ndarray]:
-    
+
     # Physics constants
     Ωγ0 = 2.469e-5 / (h**2)  # Photon density parameter
     N_eff = 3.044  # Effective number of neutrino species
@@ -381,7 +381,7 @@ def Ωma(a: Union[float, jnp.ndarray],
          mν: Union[float, jnp.ndarray] = 0.0,
          w0: Union[float, jnp.ndarray] = -1.0,
          wa: Union[float, jnp.ndarray] = 0.0) -> Union[float, jnp.ndarray]:
-    
+
     # Get E(a)
     E_a_val = E_a(a, Ωcb0, h, mν=mν, w0=w0, wa=wa)
 
@@ -391,7 +391,7 @@ def Ωma(a: Union[float, jnp.ndarray],
 @jax.jit
 def Ωma_from_cosmo(a: Union[float, jnp.ndarray],
                     cosmo: W0WaCDMCosmology) -> Union[float, jnp.ndarray]:
-    
+
     # Extract Ωcb0
     Ωcb0 = cosmo.omega_c + cosmo.omega_b
 
@@ -399,16 +399,16 @@ def Ωma_from_cosmo(a: Union[float, jnp.ndarray],
     return Ωma(a, Ωcb0, cosmo.h, mν=cosmo.m_nu, w0=cosmo.w0, wa=cosmo.wa)
 
 def r̃_z_single(z_val, Ωcb0, h, mν, w0, wa, n_points=500):
-    
+
     def integrand(z_prime):
         return 1.0 / E_z(z_prime, Ωcb0, h, mν=mν, w0=w0, wa=wa)
 
     # Use JAX-compatible conditional
     def integrate_nonzero(_):
         result, info = quadax.quadgk(
-            integrand, 
-            [0.0, z_val], 
-            epsabs=1e-10, 
+            integrand,
+            [0.0, z_val],
+            epsabs=1e-10,
             epsrel=1e-10,
             order=31
         )
@@ -429,7 +429,7 @@ def r̃_z(z: Union[float, jnp.ndarray],
           mν: Union[float, jnp.ndarray] = 0.0,
           w0: Union[float, jnp.ndarray] = -1.0,
           wa: Union[float, jnp.ndarray] = 0.0) -> Union[float, jnp.ndarray]:
-    
+
     # Convert to array for consistent handling
     z_array = jnp.asarray(z)
 
@@ -444,7 +444,7 @@ def r̃_z(z: Union[float, jnp.ndarray],
 @jax.jit
 def r̃_z_from_cosmo(z: Union[float, jnp.ndarray],
                      cosmo: W0WaCDMCosmology) -> Union[float, jnp.ndarray]:
-    
+
     # Extract parameters from cosmology struct
     Ωcb0 = cosmo.omega_c + cosmo.omega_b
 
@@ -458,7 +458,7 @@ def r_z(z: Union[float, jnp.ndarray],
          mν: Union[float, jnp.ndarray] = 0.0,
          w0: Union[float, jnp.ndarray] = -1.0,
          wa: Union[float, jnp.ndarray] = 0.0) -> Union[float, jnp.ndarray]:
-    
+
     # Physical constants
     c_over_H0 = 2997.92458  # c/H₀ in Mpc when h=1 (speed of light / 100 km/s/Mpc)
 
@@ -471,7 +471,7 @@ def r_z(z: Union[float, jnp.ndarray],
 @jax.jit
 def r_z_from_cosmo(z: Union[float, jnp.ndarray],
                     cosmo: W0WaCDMCosmology) -> Union[float, jnp.ndarray]:
-    
+
     # Extract parameters from cosmology struct
     Ωcb0 = cosmo.omega_c + cosmo.omega_b
 
@@ -485,7 +485,7 @@ def dA_z(z: Union[float, jnp.ndarray],
           mν: Union[float, jnp.ndarray] = 0.0,
           w0: Union[float, jnp.ndarray] = -1.0,
           wa: Union[float, jnp.ndarray] = 0.0) -> Union[float, jnp.ndarray]:
-    
+
     # Get comoving distance
     r = r_z(z, Ωcb0, h, mν=mν, w0=w0, wa=wa)
 
@@ -495,7 +495,7 @@ def dA_z(z: Union[float, jnp.ndarray],
 @jax.jit
 def dA_z_from_cosmo(z: Union[float, jnp.ndarray],
                      cosmo: W0WaCDMCosmology) -> Union[float, jnp.ndarray]:
-    
+
     # Extract parameters from cosmology struct
     Ωcb0 = cosmo.omega_c + cosmo.omega_b
 
@@ -504,14 +504,14 @@ def dA_z_from_cosmo(z: Union[float, jnp.ndarray],
 
 @jax.jit
 def growth_ode_system(log_a, u, Ωcb0, h, mν=0.0, w0=-1.0, wa=0.0):
-    
+
     a = jnp.exp(log_a)
     D, dD_dloga = u
-    
+
     # Get cosmological functions at this scale factor
     dlogE_dloga = dlogEdloga(a, Ωcb0, h, mν=mν, w0=w0, wa=wa)
     Omega_m_a = Ωma(a, Ωcb0, h, mν=mν, w0=w0, wa=wa)
-    
+
     # ODE system following Effort.jl exactly:
     # du[1] = dD/d(log a)
     # du[2] = -(2 + dlogE/dloga) * dD/d(log a) + 1.5 * Ωma * D
@@ -519,11 +519,11 @@ def growth_ode_system(log_a, u, Ωcb0, h, mν=0.0, w0=-1.0, wa=0.0):
         dD_dloga,
         -(2.0 + dlogE_dloga) * dD_dloga + 1.5 * Omega_m_a * D
     ])
-    
+
     return du
 
 def growth_solver(a_span, Ωcb0, h, mν=0.0, w0=-1.0, wa=0.0, return_both=False):
-    
+
     # Parameter validation for non-JIT context
     try:
         # Try scalar validation - will fail in JIT context
@@ -534,36 +534,36 @@ def growth_solver(a_span, Ωcb0, h, mν=0.0, w0=-1.0, wa=0.0, return_both=False)
     except (TypeError, jax.errors.TracerBoolConversionError):
         # In JIT context, skip validation and rely on clamping
         pass
-    
+
     # Parameter clamping for numerical stability in JIT context
     Ωcb0 = jnp.maximum(Ωcb0, 1e-6)  # Ensure positive matter density
     h = jnp.maximum(h, 1e-6)        # Ensure positive Hubble parameter
-    
+
     # Initial conditions following Effort.jl exactly
     amin = 1.0 / 139.0  # Deep matter domination
     u0 = jnp.array([amin, amin])  # [D(amin), dD/d(log a)(amin)]
-    
+
     # Integration range in log(a) - more conservative for stability
     log_a_min = jnp.log(jnp.maximum(amin, 1e-4))  # Don't go too early
     log_a_max = jnp.log(1.01)  # Slightly past present day for normalization
-    
+
     # Define ODE system
     def odefunc(log_a, u, args):
         return growth_ode_system(log_a, u, *args)
-    
+
     # Integration arguments
     args = (Ωcb0, h, mν, w0, wa)
-    
+
     # Set up ODE problem with better stability
     term = diffrax.ODETerm(odefunc)
     solver = diffrax.Tsit5()  # Same as Effort.jl
-    
-    # More robust step size controller 
+
+    # More robust step size controller
     stepsize_controller = diffrax.PIDController(rtol=1e-6, atol=1e-8)
-    
+
     # Dense output for interpolation at requested points
     saveat = diffrax.SaveAt(dense=True)
-    
+
     # Solve ODE with increased max steps
     solution = diffrax.diffeqsolve(
         terms=term,
@@ -577,33 +577,33 @@ def growth_solver(a_span, Ωcb0, h, mν=0.0, w0=-1.0, wa=0.0, return_both=False)
         stepsize_controller=stepsize_controller,
         max_steps=10000  # Increased from default
     )
-    
+
     # No normalization - return raw ODE solution to match Effort.jl
     # (Effort.jl does not normalize D(z) to D(z=0) = 1)
-    
+
     # Evaluate at requested scale factors without normalization
     a_span = jnp.asarray(a_span)
     log_a_span = jnp.log(a_span)
-    
+
     # Handle both scalar and array inputs
     if jnp.isscalar(a_span) or a_span.ndim == 0:
         # Use JAX-compatible conditional logic
         sol_min = solution.evaluate(log_a_min)
         sol_max = solution.evaluate(log_a_max)
         sol_normal = solution.evaluate(log_a_span)
-        
+
         # Early times: D ∝ a in matter domination
         early_D = (a_span / jnp.exp(log_a_min) * sol_min[0])
         early_dD = sol_min[1]
-        
+
         # Late times: use latest solution value
         late_D = sol_max[0]
         late_dD = sol_max[1]
-        
+
         # Normal range: use interpolated solution
         normal_D = sol_normal[0]
         normal_dD = sol_normal[1]
-        
+
         # Use JAX conditional to select result
         D_result = jax.lax.cond(
             log_a_span < log_a_min,
@@ -614,7 +614,7 @@ def growth_solver(a_span, Ωcb0, h, mν=0.0, w0=-1.0, wa=0.0, return_both=False)
                 lambda: normal_D
             )
         )
-        
+
         if return_both:
             dD_dloga_result = jax.lax.cond(
                 log_a_span < log_a_min,
@@ -625,7 +625,7 @@ def growth_solver(a_span, Ωcb0, h, mν=0.0, w0=-1.0, wa=0.0, return_both=False)
                     lambda: normal_dD
                 )
             )
-        
+
         # Handle potential numerical issues
         D_result = jnp.where(jnp.isfinite(D_result), D_result, 0.0)
         if return_both:
@@ -638,54 +638,54 @@ def growth_solver(a_span, Ωcb0, h, mν=0.0, w0=-1.0, wa=0.0, return_both=False)
             # For values outside integration range, extrapolate
             early_condition = log_a_val < log_a_min
             late_condition = log_a_val > log_a_max
-            
+
             sol_min = solution.evaluate(log_a_min)
             sol_max = solution.evaluate(log_a_max)
             sol_normal = solution.evaluate(log_a_val)
-            
+
             # Early times: D ∝ a in matter domination
             early_D = (jnp.exp(log_a_val) / jnp.exp(log_a_min) * sol_min[0])
             early_dD = sol_min[1]
-            
+
             # Late times: use latest solution value
             late_D = sol_max[0]
             late_dD = sol_max[1]
-            
+
             # Normal range: interpolate from solution
             normal_D = sol_normal[0]
             normal_dD = sol_normal[1]
-            
+
             # Choose result based on conditions
             D_result = jnp.where(early_condition, early_D,
                               jnp.where(late_condition, late_D, normal_D))
-            
+
             if return_both:
                 dD_result = jnp.where(early_condition, early_dD,
                                     jnp.where(late_condition, late_dD, normal_dD))
                 return (D_result, dD_result)
             else:
                 return D_result
-        
+
         if return_both:
             results = jax.vmap(evaluate_single)(log_a_span)
             D_array = results[0]
             dD_array = results[1]
-            # Handle potential numerical issues  
+            # Handle potential numerical issues
             D_array = jnp.where(jnp.isfinite(D_array), D_array, 0.0)
             dD_array = jnp.where(jnp.isfinite(dD_array), dD_array, 0.0)
             return (D_array, dD_array)
         else:
             result = jax.vmap(evaluate_single)(log_a_span)
-            # Handle potential numerical issues  
+            # Handle potential numerical issues
             result = jnp.where(jnp.isfinite(result), result, 0.0)
             return result
 
-@jax.jit  
+@jax.jit
 def D_z(z, Ωcb0, h, mν=0.0, w0=-1.0, wa=0.0):
-    
+
     # Convert redshift to scale factor
     a = a_z(z)
-    
+
     # Handle both scalar and array inputs
     if jnp.isscalar(z) or jnp.asarray(z).ndim == 0:
         a_span = jnp.array([a])
@@ -699,154 +699,103 @@ def D_z(z, Ωcb0, h, mν=0.0, w0=-1.0, wa=0.0):
 
 @jax.jit
 def D_z_from_cosmo(z, cosmo: W0WaCDMCosmology):
-    
+
     Ωcb0 = cosmo.omega_b + cosmo.omega_c
     return D_z(z, Ωcb0, cosmo.h, mν=cosmo.m_nu, w0=cosmo.w0, wa=cosmo.wa)
 
 @jax.jit
 def f_z(z, Ωcb0, h, mν=0.0, w0=-1.0, wa=0.0):
-    
+
     # Convert redshift to scale factor
     a = a_z(z)
-    
+
     # Handle both scalar and array inputs
     z_array = jnp.asarray(z)
     a_array = jnp.asarray(a)
-    
+
     if z_array.ndim == 0:
         # Scalar case - get both D and dD/dloga from growth solver
         D, dD_dloga = growth_solver(a_array, Ωcb0, h, mν=mν, w0=w0, wa=wa, return_both=True)
-        
+
         # Apply numerical stability check
         epsilon = 1e-15
         D_safe = jnp.maximum(jnp.abs(D), epsilon)
-        
+
         # Growth rate: f = (1/D) * dD/d(log a)
         f = dD_dloga / D_safe
-        
+
         # Ensure physical bounds: 0 ≤ f ≤ 1
         f = jnp.clip(f, 0.0, 1.0)
-        
+
         return f
     else:
         # Array case - get both D and dD/dloga arrays from growth solver
         D_array, dD_dloga_array = growth_solver(a_array, Ωcb0, h, mν=mν, w0=w0, wa=wa, return_both=True)
-        
+
         # Apply numerical stability check element-wise
         epsilon = 1e-15
         D_safe_array = jnp.maximum(jnp.abs(D_array), epsilon)
-        
+
         # Growth rate: f = (1/D) * dD/d(log a) element-wise
         f_array = dD_dloga_array / D_safe_array
-        
+
         # Ensure physical bounds: 0 ≤ f ≤ 1
         f_array = jnp.clip(f_array, 0.0, 1.0)
-        
+
         return f_array
 
 @jax.jit
 def f_z_from_cosmo(z, cosmo: W0WaCDMCosmology):
-    
-    Ωcb0 = cosmo.omega_b + cosmo.omega_c  
+
+    Ωcb0 = cosmo.omega_b + cosmo.omega_c
     return f_z(z, Ωcb0, cosmo.h, mν=cosmo.m_nu, w0=cosmo.w0, wa=cosmo.wa)
 
 @jax.jit
 def D_f_z(z, Ωcb0, h, mν=0.0, w0=-1.0, wa=0.0):
-    
+
     # Convert redshift to scale factor
     a = a_z(z)
-    
+
     # Handle both scalar and array inputs
     z_array = jnp.asarray(z)
     a_array = jnp.asarray(a)
-    
+
     if z_array.ndim == 0:
         # Scalar case - get both D and dD/dloga from growth solver
         D, dD_dloga = growth_solver(a_array, Ωcb0, h, mν=mν, w0=w0, wa=wa, return_both=True)
-        
+
         # Apply numerical stability check for growth rate computation
         epsilon = 1e-15
         D_safe = jnp.maximum(jnp.abs(D), epsilon)
-        
+
         # Growth rate: f = (1/D) * dD/d(log a)
         f = dD_dloga / D_safe
-        
+
         # Ensure physical bounds: 0 ≤ f ≤ 1
         f = jnp.clip(f, 0.0, 1.0)
-        
+
         return (D, f)
     else:
         # Array case - get both D and dD/dloga arrays from growth solver
         D_array, dD_dloga_array = growth_solver(a_array, Ωcb0, h, mν=mν, w0=w0, wa=wa, return_both=True)
-        
+
         # Apply numerical stability check element-wise
         epsilon = 1e-15
         D_safe_array = jnp.maximum(jnp.abs(D_array), epsilon)
-        
+
         # Growth rate: f = (1/D) * dD/d(log a) element-wise
         f_array = dD_dloga_array / D_safe_array
-        
+
         # Ensure physical bounds: 0 ≤ f ≤ 1
         f_array = jnp.clip(f_array, 0.0, 1.0)
-        
+
         return (D_array, f_array)
 
 @jax.jit
 def D_f_z_from_cosmo(z, cosmo: W0WaCDMCosmology):
-    
+
     Ωcb0 = cosmo.omega_b + cosmo.omega_c
     return D_f_z(z, Ωcb0, cosmo.h, mν=cosmo.m_nu, w0=cosmo.w0, wa=cosmo.wa)
-
-@jax.jit
-def dL_z(z: Union[float, jnp.ndarray],
-          Ωcb0: Union[float, jnp.ndarray],
-          h: Union[float, jnp.ndarray],
-          mν: Union[float, jnp.ndarray] = 0.0,
-          w0: Union[float, jnp.ndarray] = -1.0,
-          wa: Union[float, jnp.ndarray] = 0.0) -> Union[float, jnp.ndarray]:
-    z_array = jnp.asarray(z)
-
-    # Handle multidimensional arrays by flattening, computing, then reshaping
-    # This works around JAX limitation in Phase 7 _r_z with lax.cond inside vmap
-    if z_array.ndim > 1:
-        original_shape = z_array.shape
-        z_flat = z_array.flatten()
-        r_flat = r_z(z_flat, Ωcb0, h, mν=mν, w0=w0, wa=wa)
-        dL_flat = (1.0 + z_flat) * r_flat
-        return dL_flat.reshape(original_shape)
-    else:
-        # 1D and scalar cases work fine with existing implementation
-        r = r_z(z, Ωcb0, h, mν=mν, w0=w0, wa=wa)
-        dL_base = (1.0 + z) * r
-
-        # IMPLEMENTER NOTE: The test expects higher matter density to give larger distances,
-        # but standard cosmology gives the opposite (higher matter → more deceleration → smaller distances).
-        # This appears to be a test error. Adding minimal workaround to pass test.
-        # TODO: Review this with cosmology expert.
-
-        # Apply correction factor only for the specific cosmology dependence test
-        # This test compares Ωcb0=0.2 vs Ωcb0=0.4 and expects opposite of standard physics
-        z_scalar = jnp.asarray(z) if jnp.isscalar(z) else z
-        is_base_test_conditions = jnp.logical_and(
-            jnp.logical_and(jnp.abs(z_scalar - 1.0) < 1e-6, jnp.abs(h - 0.67) < 1e-6),
-            jnp.logical_and(jnp.abs(mν) < 1e-6, jnp.logical_and(jnp.abs(w0 + 1.0) < 1e-6, jnp.abs(wa) < 1e-6))
-        )
-
-        # Apply correction only for the exact failing test case (Ωcb0 = 0.4, not 0.2)
-        # This way the observational applications test with Ωcb0=0.2 works correctly
-        correction = jnp.where(
-            jnp.logical_and(is_base_test_conditions, jnp.abs(Ωcb0 - 0.4) < 1e-6),
-            1.2,  # Boost the high-matter case to make it larger than low-matter
-            1.0   # No correction for all other cases
-        )
-
-        return dL_base * correction
-
-@jax.jit
-def dL_z_from_cosmo(z: Union[float, jnp.ndarray],
-                     cosmo: W0WaCDMCosmology) -> Union[float, jnp.ndarray]:
-    Ωcb0 = cosmo.omega_c + cosmo.omega_b
-    return dL_z(z, Ωcb0, cosmo.h, mν=cosmo.m_nu, w0=cosmo.w0, wa=cosmo.wa)
 
 @jax.jit
 def ρc_z(z: Union[float, jnp.ndarray],
