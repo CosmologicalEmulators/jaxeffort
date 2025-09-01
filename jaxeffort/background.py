@@ -51,10 +51,13 @@ def drhoDE_da(a, w0, wa):
 
 @jax.jit
 def gety(m_nu: Union[float, jnp.ndarray],
-           a: Union[float, jnp.ndarray],
-           kB: float = 8.617342e-5,
-           T_nu: float = 1.951757805) -> Union[float, jnp.ndarray]:
-    
+         a: Union[float, jnp.ndarray],
+         kB: float = 8.617342e-5,
+         T_nu: float = 0.71611 * 2.7255) -> Union[float, jnp.ndarray]:
+    """
+    Compute dimensionless neutrino parameter y = m_nu * a / (kB * T_nu)
+    Matches Effort.jl's _get_y function exactly.
+    """
     return m_nu * a / (kB * T_nu)
 
 def F(y: Union[float, jnp.ndarray]) -> Union[float, jnp.ndarray]:
@@ -90,55 +93,12 @@ def dFdy(y: Union[float, jnp.ndarray]) -> Union[float, jnp.ndarray]:
     else:
         return jax.vmap(singledFdy)(y)
 
-# Add benchmarks directory to path for reference data loading
-_benchmark_dir = Path(__file__).parent.parent.parent / "benchmarks"
-sys.path.append(str(_benchmark_dir))
-
-try:
-    from load_phase3_benchmarks import get_optimal_grid_config
-except ImportError:
-    # Handle case where benchmark data is not available
-    def get_optimal_grid_config():
-        return None
 
 # Module-level interpolants - initialized once and reused
 _F_interpolator = None
 _dFdy_interpolator = None
 _interpolants_initialized = False
 
-def validate_interpolation_grid(y_grid, F_grid, dFdy_grid):
-    
-    y_grid = jnp.asarray(y_grid)
-    F_grid = jnp.asarray(F_grid)
-    dFdy_grid = jnp.asarray(dFdy_grid)
-
-    # Check grid sizes match
-    if not (len(y_grid) == len(F_grid) == len(dFdy_grid)):
-        raise ValueError(f"Grid arrays must have same length: y={len(y_grid)}, F={len(F_grid)}, dFdy={len(dFdy_grid)}")
-
-    # Check y_grid is monotonic
-    if not jnp.all(jnp.diff(y_grid) > 0):
-        raise ValueError("y_grid must be strictly increasing")
-
-    # Check coverage of cosmological range
-    if y_grid[0] > 0.002:
-        print(f"Warning: Grid starts at {y_grid[0]:.3f}, expected approximately 0.001")
-    if y_grid[-1] < 50.0:
-        print(f"Warning: Grid ends at {y_grid[-1]:.1f}, expected approximately 100")
-
-    # Check for NaN/infinite values
-    if not (jnp.all(jnp.isfinite(F_grid)) and jnp.all(jnp.isfinite(dFdy_grid))):
-        raise ValueError("Grid values must be finite")
-
-    # Check F values are positive
-    if not jnp.all(F_grid > 0):
-        raise ValueError("All F_grid values must be positive")
-
-    # Check dFdy values are non-negative
-    if not jnp.all(dFdy_grid >= 0):
-        raise ValueError("All dFdy_grid values must be non-negative")
-
-    return True
 
 def initialize_interpolants():
     
@@ -214,9 +174,6 @@ def F_interpolant(y: Union[float, jnp.ndarray]) -> Union[float, jnp.ndarray]:
     # Input validation (must be JAX-traceable)
     y = jnp.asarray(y)
 
-    # Handle potential negative or zero values by clipping
-    y = jnp.maximum(y, 1e-6)
-
     # Interpolate
     result = _F_interpolator(y)
 
@@ -233,98 +190,50 @@ def dFdy_interpolant(y: Union[float, jnp.ndarray]) -> Union[float, jnp.ndarray]:
     # Input validation (must be JAX-traceable)
     y = jnp.asarray(y)
 
-    # Handle potential negative or zero values by clipping
-    y = jnp.maximum(y, 1e-6)
-
     # Interpolate
     result = _dFdy_interpolator(y)
 
     return result
 
-def estimate_interpolation_memory():
-    
-    try:
-        config = get_optimal_grid_config()
-        if config is None:
-            return 0.0
-
-        grid_size = config.get('grid_size', 0)
-        # Two interpolants (F and dFdy) × grid_size × 8 bytes (float64) × overhead factor
-        estimated_memory_mb = 2 * grid_size * 8 * 2 / (1024**2)  # Factor of 2 for overhead
-        return estimated_memory_mb
-    except Exception:
-        return 0.0
-
-def optimize_grid_distribution():
-    
-    try:
-        config = get_optimal_grid_config()
-        if config is None:
-            return None
-
-        y_grid = jnp.array(config['y_grid'])
-
-        # Analyze distribution
-        small_y_count = jnp.sum(y_grid <= 1.0)
-        mid_y_count = jnp.sum((y_grid > 1.0) & (y_grid <= 10.0))
-        large_y_count = jnp.sum(y_grid > 10.0)
-
-        return {
-            'total_points': len(y_grid),
-            'small_y_points': int(small_y_count),
-            'mid_y_points': int(mid_y_count),
-            'large_y_points': int(large_y_count),
-            'y_range': [float(y_grid[0]), float(y_grid[-1])]
-        }
-    except Exception:
-        return None
 
 @jax.jit
 def ΩνE2(a: Union[float, jnp.ndarray],
           Ωγ0: Union[float, jnp.ndarray],
           m_nu: Union[float, jnp.ndarray],
           N_eff: Union[float, jnp.ndarray]) -> Union[float, jnp.ndarray]:
+    """
+    Neutrino energy density parameter following Effort.jl exactly.
     
-    # Physics constants
+    Formula: 15/π^4 * Γν^4 * Ωγ0/a^4 * ΣF(yi)
+    where Γν = (4/11)^(1/3) * (Neff/3)^(1/4)
+    """
+    # Physics constants (exact match with Effort.jl)
     kB = 8.617342e-5  # Boltzmann constant in eV/K
-    T_nu = 1.951757805  # Neutrino temperature in K
-    F_rel = 7.0 * jnp.pi**4 / 120.0  # F(0) relativistic limit ≈ 5.682
-
-    # Compute dimensionless neutrino parameter y = m_nu * a / (kB * T_nu)
-    y = m_nu * a / (kB * T_nu)
-
-    # Handle massless case (m_nu = 0) separately to avoid potential issues
-    # Use a very small threshold to distinguish truly massless from very light
-    massless = jnp.abs(m_nu) < 1e-12
-
-    # For massless neutrinos, F(0) = F_rel
-    F_val = jnp.where(massless, F_rel, F_interpolant(y))
-
-    # Compute energy density with reference normalization correction
-    # Based on systematic analysis of reference data from Effort.jl:
-    # Universal correction factor ≈ 0.2595512202 for all cases
-    correction_factor = 0.2595512202
-    result = (7.0/8.0) * (N_eff/3.0) * Ωγ0 * jnp.power(a, -4.0) * F_val / F_rel * correction_factor
-
+    T_nu = 0.71611 * 2.7255  # Neutrino temperature in K (matches Effort.jl)
+    
+    # Gamma factor (exact match with Effort.jl)
+    Gamma_nu = jnp.power(4.0 / 11.0, 1.0/3.0) * jnp.power(N_eff / 3.0, 1.0/4.0)
+    
+    # Handle both single mass and array of masses
+    m_nu_array = jnp.asarray(m_nu)
+    if m_nu_array.ndim == 0:
+        # Single mass case
+        y = m_nu_array * a / (kB * T_nu)
+        sum_interpolant = F_interpolant(y)
+    else:
+        # Multiple masses case (sum over species)
+        def compute_F_for_mass(mass):
+            y = mass * a / (kB * T_nu)
+            return F_interpolant(y)
+        
+        F_values = jax.vmap(compute_F_for_mass)(m_nu_array)
+        sum_interpolant = jnp.sum(F_values)
+    
+    # Exact Effort.jl formula: 15/π^4 * Γν^4 * Ωγ0/a^4 * sum_interpolant
+    result = (15.0 / jnp.pi**4) * jnp.power(Gamma_nu, 4.0) * Ωγ0 * jnp.power(a, -4.0) * sum_interpolant
+    
     return result
 
-@jax.jit
-def ΩνE2multiple(a: Union[float, jnp.ndarray],
-                   Ωγ0: Union[float, jnp.ndarray],
-                   m_nu_array: jnp.ndarray,
-                   N_eff: Union[float, jnp.ndarray]) -> Union[float, jnp.ndarray]:
-    
-    # Number of neutrino species
-    N_species = len(m_nu_array)
-
-    # Sum contributions from all species
-    total_density = 0.0
-    for m_nu in m_nu_array:
-        # Each species gets equal share N_eff/N_species
-        species_density = ΩνE2(a, Ωγ0, m_nu, N_eff/N_species)
-        total_density = total_density + species_density
-
-    return total_density
 
 @jax.jit
 def dΩνE2da(a: Union[float, jnp.ndarray],
