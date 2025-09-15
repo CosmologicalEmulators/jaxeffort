@@ -63,7 +63,8 @@ class MLP:
                  in_MinMax: np.ndarray,
                  out_MinMax: np.ndarray,
                  postprocessing: callable,
-                 emulator_description: Dict[str, Any]):
+                 emulator_description: Dict[str, Any],
+                 nn_dict: Dict[str, Any]):
         """
         Initialize MLP with jaxace emulator and Effort-specific components.
 
@@ -74,6 +75,7 @@ class MLP:
             out_MinMax: Output normalization parameters
             postprocessing: Postprocessing function
             emulator_description: Emulator metadata
+            nn_dict: Neural network configuration dictionary
         """
         self.emulator = emulator
         self.k_grid = jnp.asarray(k_grid)
@@ -82,10 +84,25 @@ class MLP:
         self.postprocessing = postprocessing
         self.emulator_description = emulator_description
 
-        # Store emulator features for compatibility
-        self.features = emulator.features
-        self.activations = emulator.activations
-        self.NN_params = emulator.params
+        # Store emulator features for compatibility - extract from nn_dict
+        self.features = self._extract_features(nn_dict)
+        self.activations = self._extract_activations(nn_dict)
+        self.NN_params = emulator.parameters
+
+    def _extract_features(self, nn_dict):
+        """Extract layer sizes from nn_dict for compatibility."""
+        features = []
+        for i in range(nn_dict['n_hidden_layers']):
+            features.append(nn_dict['layers'][f'layer_{i+1}']['n_neurons'])
+        features.append(nn_dict['n_output_features'])
+        return features
+
+    def _extract_activations(self, nn_dict):
+        """Extract activation functions from nn_dict for compatibility."""
+        activations = []
+        for i in range(nn_dict['n_hidden_layers']):
+            activations.append(nn_dict['layers'][f'layer_{i+1}']['activation_function'])
+        return activations
 
     def maximin(self, input):
         """Normalize input using jaxace's maximin function."""
@@ -262,7 +279,8 @@ def load_component_emulator(folder_path):
         in_MinMax=in_MinMax,
         out_MinMax=out_MinMax,
         postprocessing=postprocessing,
-        emulator_description=emulator_description
+        emulator_description=emulator_description,
+        nn_dict=nn_dict
     )
 
 
