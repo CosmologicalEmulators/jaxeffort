@@ -7,6 +7,32 @@ import flax.linen as nn
 import json
 import importlib.util
 from typing import Tuple
+import sys
+import os
+
+# Import all background cosmology functions from jaxace (installed via pip/poetry)
+from jaxace.background import (
+    W0WaCDMCosmology,
+    a_z, E_a, E_z, dlogEdloga, Ωma,
+    D_z, f_z, D_f_z,
+    r_z,
+    dA_z,
+    dL_z,
+    ρc_z, Ωtot_z,
+    # Neutrino functions
+    F, dFdy, ΩνE2,
+    # Growth solver
+    growth_solver, growth_ode_system
+)
+
+# Create aliases for compatibility
+D_z_from_cosmo = D_z
+f_z_from_cosmo = f_z
+D_f_z_from_cosmo = D_f_z
+r_z_from_cosmo = r_z
+dA_z_from_cosmo = dA_z
+dL_z_from_cosmo = dL_z
+Ωm_a = Ωma  # Alias for test compatibility
 
 jax.config.update("jax_enable_x64", True)
 
@@ -214,6 +240,9 @@ def load_bias_contraction(root_path, filename="biascontraction", required=True):
 
 def load_component_emulator(folder_path):
     """Load a component emulator (P11, Ploop, Pct, or Noise) without bias contraction."""
+    # Ensure folder path ends with separator
+    if not folder_path.endswith('/'):
+        folder_path += '/'
     in_MinMax = jnp.load(folder_path + "inminmax.npy")
 
     f = open(folder_path + '/nn_setup.json')

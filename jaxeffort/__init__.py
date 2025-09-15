@@ -1,2 +1,2 @@
 from jaxeffort.jaxeffort import *
-from jaxeffort.background import *
+# Background functions now come from jaxace via jaxeffort.py imports
