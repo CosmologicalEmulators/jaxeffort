@@ -1,6 +1,5 @@
 # jaxeffort
 
-
 Repo containing the jaxeffort emulator.
 
 ## Installation and usage
