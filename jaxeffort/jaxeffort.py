@@ -1,25 +1,21 @@
-from typing import Sequence, List
+from typing import Sequence, List, Tuple, Dict, Any
+import os
+import json
+import importlib.util
 
 import numpy as np
 import jax
 import jax.numpy as jnp
-import flax.linen as nn
-import json
-import importlib.util
-from typing import Tuple
-import sys
-import os
+from functools import partial
 
-# Import all background cosmology functions from jaxace (installed via pip/poetry)
+# Import all background cosmology functions from jaxace
 # Handle different jaxace versions that may export Ωma or Ωm_a
 try:
     from jaxace.background import (
         W0WaCDMCosmology,
         a_z, E_a, E_z, dlogEdloga, Ωma,
         D_z, f_z, D_f_z,
-        r_z,
-        dA_z,
-        dL_z,
+        r_z, dA_z, dL_z,
         ρc_z, Ωtot_z,
         # Neutrino functions
         F, dFdy, ΩνE2,
@@ -33,9 +29,7 @@ except ImportError:
         W0WaCDMCosmology,
         a_z, E_a, E_z, dlogEdloga, Ωm_a,
         D_z, f_z, D_f_z,
-        r_z,
-        dA_z,
-        dL_z,
+        r_z, dA_z, dL_z,
         ρc_z, Ωtot_z,
         # Neutrino functions
         F, dFdy, ΩνE2,
@@ -44,53 +38,77 @@ except ImportError:
     )
     Ωma = Ωm_a  # Create reverse alias
 
-# Create aliases for compatibility
-D_z_from_cosmo = D_z
-f_z_from_cosmo = f_z
-D_f_z_from_cosmo = D_f_z
-r_z_from_cosmo = r_z
-dA_z_from_cosmo = dA_z
-dL_z_from_cosmo = dL_z
+# Import neural network infrastructure from jaxace
+from jaxace import (
+    init_emulator,
+    FlaxEmulator,
+    maximin,
+    inv_maximin
+)
 
 jax.config.update("jax_enable_x64", True)
 
-class MLP(nn.Module):
-  k_grid:np.array
-  features: Sequence[int]
-  activations: List[str]
-  in_MinMax: np.array
-  out_MinMax: np.array
-  NN_params: dict
-  postprocessing: callable
-  emulator_description: dict
 
-  @nn.compact
-  def __call__(self, x):
-    for i, feat in enumerate(self.features[:-1]):
-      if self.activations[i] == "tanh":
-        x = nn.tanh(nn.Dense(feat)(x))
-      elif self.activations[i] == "relu":
-        x = nn.relu(nn.Dense(feat)(x))
-      # Add more activation functions as needed
-    x = nn.Dense(self.features[-1])(x)
-    return x
+class MLP:
+    """
+    Effort MLP emulator using jaxace infrastructure.
 
-  def maximin(self, input):
-    return (input - self.in_MinMax[:,0]) / (self.in_MinMax[:,1] - self.in_MinMax[:,0])
+    This class wraps a jaxace FlaxEmulator with Effort-specific functionality
+    for galaxy power spectrum computation.
+    """
 
-  def inv_maximin(self, output):
-    return output * (self.out_MinMax[:,1] - self.out_MinMax[:,0]) + self.out_MinMax[:,0]
+    def __init__(self,
+                 emulator: FlaxEmulator,
+                 k_grid: np.ndarray,
+                 in_MinMax: np.ndarray,
+                 out_MinMax: np.ndarray,
+                 postprocessing: callable,
+                 emulator_description: Dict[str, Any]):
+        """
+        Initialize MLP with jaxace emulator and Effort-specific components.
 
-  def get_component(self, input, D):
-    """Get raw component output without bias contraction, matching Effort.jl's get_component."""
-    norm_input = self.maximin(input)
-    norm_model_output = self.apply(self.NN_params, norm_input)
-    model_output = self.inv_maximin(norm_model_output)
-    processed_model_output = self.postprocessing(input, model_output, D, self)
-    reshaped_output = processed_model_output.reshape(
-        (len(self.k_grid), int(len(processed_model_output) / len(self.k_grid))), order = "F"
-    )
-    return reshaped_output
+        Args:
+            emulator: jaxace FlaxEmulator instance
+            k_grid: k-space grid for power spectrum
+            in_MinMax: Input normalization parameters
+            out_MinMax: Output normalization parameters
+            postprocessing: Postprocessing function
+            emulator_description: Emulator metadata
+        """
+        self.emulator = emulator
+        self.k_grid = jnp.asarray(k_grid)
+        self.in_MinMax = jnp.asarray(in_MinMax)
+        self.out_MinMax = jnp.asarray(out_MinMax)
+        self.postprocessing = postprocessing
+        self.emulator_description = emulator_description
+
+        # Store emulator features for compatibility
+        self.features = emulator.features
+        self.activations = emulator.activations
+        self.NN_params = emulator.params
+
+    def maximin(self, input):
+        """Normalize input using jaxace's maximin function."""
+        return maximin(input, self.in_MinMax)
+
+    def inv_maximin(self, output):
+        """Denormalize output using jaxace's inv_maximin function."""
+        return inv_maximin(output, self.out_MinMax)
+
+    def apply(self, params, x):
+        """Apply the neural network (for backward compatibility)."""
+        return self.emulator.run_emulator(x)
+
+    def get_component(self, input, D):
+        """Get raw component output without bias contraction, matching Effort.jl's get_component."""
+        norm_input = self.maximin(input)
+        norm_model_output = self.emulator.run_emulator(norm_input)
+        model_output = self.inv_maximin(norm_model_output)
+        processed_model_output = self.postprocessing(input, model_output, D, self)
+        reshaped_output = processed_model_output.reshape(
+            (len(self.k_grid), int(len(processed_model_output) / len(self.k_grid))), order="F"
+        )
+        return reshaped_output
 
 
 class MultipoleEmulators:
@@ -133,7 +151,7 @@ class MultipoleEmulators:
         """
         P11_comp, Ploop_comp, Pct_comp = self.get_multipole_components(cosmology, D)
         stacked_array = jnp.hstack((P11_comp, Ploop_comp, Pct_comp))
-        
+
         # Use multipole-level bias contraction (matches Effort.jl's PℓEmulator.BiasContraction)
         return self.bias_contraction(biases, stacked_array)
 
@@ -141,6 +159,7 @@ class MultipoleEmulators:
         """Get raw components without bias contraction."""
         P11_output, Ploop_output, Pct_output = self.get_multipole_components(cosmology, D)
         return jnp.hstack((P11_output, Ploop_output, Pct_output))
+
 
 class MultipoleNoiseEmulator:
     def __init__(self, multipole_emulator: MultipoleEmulators, noise_emulator: MLP, bias_contraction: callable):
@@ -162,7 +181,7 @@ class MultipoleNoiseEmulator:
         P11_comp, Ploop_comp, Pct_comp = self.multipole_emulator.get_multipole_components(cosmology, D)
         Noise_comp = self.noise_emulator.get_component(cosmology, D)
         stacked_array = jnp.hstack((P11_comp, Ploop_comp, Pct_comp, Noise_comp))
-        
+
         # Use the overall bias contraction
         return self.bias_contraction(biases, stacked_array)
 
@@ -173,65 +192,13 @@ class MultipoleNoiseEmulator:
         return jnp.hstack((P11_output, Ploop_output, Pct_output, Noise_output))
 
 
-def get_flax_params(nn_dict, weights):
-    in_array, out_array = get_in_out_arrays(nn_dict)
-    i_array = get_i_array(in_array, out_array)
-    params = [get_weight_bias(i_array[j], in_array[j], out_array[j], weights, nn_dict) for j in range(nn_dict["n_hidden_layers"]+1)]
-    layer = ["layer_" + str(j) for j in range(nn_dict["n_hidden_layers"]+1)]
-    return dict(zip(layer, params))
-
-def get_weight_bias(i, n_in, n_out, weight_bias, nn_dict):
-    weight = np.reshape(weight_bias[i:i+n_out*n_in], (n_in, n_out))
-    bias = weight_bias[i+n_out*n_in:i+n_out*n_in+n_out]
-    i += n_out*n_in+n_out
-    return {'kernel': weight, 'bias': bias}, i
-
-def get_in_out_arrays(nn_dict):
-    n = nn_dict["n_hidden_layers"]
-    in_array = np.zeros(n+1, dtype=int)
-    out_array = np.zeros(n+1, dtype=int)
-    in_array[0] = nn_dict["n_input_features"]
-    out_array[-1] = nn_dict["n_output_features"]
-    for i in range(n):
-        in_array[i+1] = nn_dict["layers"]["layer_" + str(i+1)]["n_neurons"]
-        out_array[i] = nn_dict["layers"]["layer_" + str(i+1)]["n_neurons"]
-    return in_array, out_array
-
-def get_i_array(in_array, out_array):
-    i_array = np.empty_like(in_array)
-    i_array[0] = 0
-    for i in range(1, len(i_array)):
-        i_array[i] = i_array[i-1] + in_array[i-1]*out_array[i-1] + out_array[i-1]
-    return i_array
-
-def load_weights(nn_dict, weights):
-    in_array, out_array = get_in_out_arrays(nn_dict)
-    i_array = get_i_array(in_array, out_array)
-    variables = {'params': {}}
-    i = 0
-    for j in range(nn_dict["n_hidden_layers"]+1):
-        layer_params, i = get_weight_bias(i_array[j], in_array[j], out_array[j], weights, nn_dict)
-        variables['params']["Dense_" + str(j)] = layer_params
-    return variables
-
-def load_activation_function(nn_dict):
-    list_activ_func = []
-    for j in range(nn_dict["n_hidden_layers"]):
-        list_activ_func.append(nn_dict["layers"]["layer_" + str(j+1)]["activation_function"])
-    return list_activ_func
-
-def load_number_neurons(nn_dict):
-    list_n_neurons = []
-    for j in range(nn_dict["n_hidden_layers"]):
-        list_n_neurons.append(nn_dict["layers"]["layer_" + str(j+1)]["n_neurons"])
-    list_n_neurons.append(nn_dict["n_output_features"])
-    return list_n_neurons
-
 def load_preprocessing(root_path, filename):
+    """Load postprocessing function from Python file."""
     spec = importlib.util.spec_from_file_location(filename, root_path + "/" + filename + ".py")
     test = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(test)
     return test.postprocessing
+
 
 def load_bias_contraction(root_path, filename="biascontraction", required=True):
     """Load bias contraction function from Python file."""
@@ -241,11 +208,11 @@ def load_bias_contraction(root_path, filename="biascontraction", required=True):
         if required:
             raise FileNotFoundError(f"Bias contraction file not found: {filepath}")
         return None
-    
+
     spec = importlib.util.spec_from_file_location(filename, filepath)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    
+
     # Try to get BiasContraction function (capital B) or biascontraction (lowercase)
     if hasattr(module, 'BiasContraction'):
         return module.BiasContraction
@@ -256,36 +223,48 @@ def load_bias_contraction(root_path, filename="biascontraction", required=True):
             raise AttributeError(f"No BiasContraction or biascontraction function found in {filepath}")
         return None
 
+
 def load_component_emulator(folder_path):
-    """Load a component emulator (P11, Ploop, Pct, or Noise) without bias contraction."""
+    """Load a component emulator (P11, Ploop, Pct, or Noise) using jaxace infrastructure."""
     # Ensure folder path ends with separator
     if not folder_path.endswith('/'):
         folder_path += '/'
+
+    # Load normalization parameters
     in_MinMax = jnp.load(folder_path + "inminmax.npy")
+    out_MinMax = jnp.load(folder_path + "outminmax.npy")
 
-    f = open(folder_path + '/nn_setup.json')
+    # Load neural network configuration
+    with open(folder_path + '/nn_setup.json', 'r') as f:
+        nn_dict = json.load(f)
 
-    # returns JSON object as
-    # a dictionary
-    NN_dict = json.load(f)
-    f.close()
-
-    #spec = importlib.util.spec_from_file_location("postprocessing", "postprocessing.py")
-    #test = importlib.util.module_from_spec(spec)
-    #spec.loader.exec_module(test)
-
-    postprocessing = load_preprocessing(folder_path, "postprocessing")
-
-    activation_function_list = load_activation_function(NN_dict)
-    list_n_neurons = load_number_neurons(NN_dict)
-
+    # Load k-grid and weights
     k_grid = jnp.load(folder_path + "k.npy")
     weights = jnp.load(folder_path + "weights.npy")
-    out_MinMax = jnp.load(folder_path + "outminmax.npy")
-    variables = load_weights(NN_dict, weights)
 
-    # Components don't have bias contraction - that's at PℓEmulator level
-    return MLP(k_grid, list_n_neurons, activation_function_list, in_MinMax, out_MinMax, variables, postprocessing, NN_dict["emulator_description"])
+    # Initialize jaxace emulator
+    jaxace_emulator = init_emulator(
+        nn_dict=nn_dict,
+        weight=weights,
+        validate=True
+    )
+
+    # Load postprocessing
+    postprocessing = load_preprocessing(folder_path, "postprocessing")
+
+    # Extract emulator description
+    emulator_description = nn_dict.get("emulator_description", {})
+
+    # Create MLP instance with jaxace backend
+    return MLP(
+        emulator=jaxace_emulator,
+        k_grid=k_grid,
+        in_MinMax=in_MinMax,
+        out_MinMax=out_MinMax,
+        postprocessing=postprocessing,
+        emulator_description=emulator_description
+    )
+
 
 def load_multipole_emulator(folder_path: str) -> MultipoleEmulators:
     """
@@ -307,12 +286,13 @@ def load_multipole_emulator(folder_path: str) -> MultipoleEmulators:
     P11_emulator = load_component_emulator(P11_path)
     Ploop_emulator = load_component_emulator(Ploop_path)
     Pct_emulator = load_component_emulator(Pct_path)
-    
+
     # Load multipole-level bias contraction - this is required (matches Effort.jl PℓEmulator)
     multipole_bias_contraction = load_bias_contraction(folder_path, required=True)
 
     # Return the MultipoleEmulators instance with bias contraction
     return MultipoleEmulators(P11_emulator, Ploop_emulator, Pct_emulator, multipole_bias_contraction)
+
 
 def load_multipole_noise_emulator(folder_path: str) -> MultipoleNoiseEmulator:
     """
@@ -331,24 +311,24 @@ def load_multipole_noise_emulator(folder_path: str) -> MultipoleNoiseEmulator:
     Ploop_path = f"{folder_path}/loop/"
     Pct_path = f"{folder_path}/ct/"
     noise_path = f"{folder_path}/st/"
-    
+
     # Load component emulators (no bias contraction at component level)
     P11_emulator = load_component_emulator(P11_path)
     Ploop_emulator = load_component_emulator(Ploop_path)
     Pct_emulator = load_component_emulator(Pct_path)
     noise_emulator = load_component_emulator(noise_path)
-    
+
     # For MultipoleNoiseEmulator, we need a bias contraction at the top level
     # This handles all components including noise
     overall_bias_contraction = load_bias_contraction(folder_path, required=True)
-    
+
     # Create multipole emulator with a placeholder bias contraction
     # (The actual contraction happens at the MultipoleNoiseEmulator level)
     def placeholder_contraction(biases, stacked_array):
         # This is never called - MultipoleNoiseEmulator uses its own bias_contraction
         raise NotImplementedError("This should not be called")
-    
+
     multipole_emulator = MultipoleEmulators(P11_emulator, Ploop_emulator, Pct_emulator, placeholder_contraction)
-    
+
     # Return the MultipoleNoiseEmulator instance with bias contraction
     return MultipoleNoiseEmulator(multipole_emulator, noise_emulator, overall_bias_contraction)
