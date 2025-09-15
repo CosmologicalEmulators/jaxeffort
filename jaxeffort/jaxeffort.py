@@ -11,19 +11,38 @@ import sys
 import os
 
 # Import all background cosmology functions from jaxace (installed via pip/poetry)
-from jaxace.background import (
-    W0WaCDMCosmology,
-    a_z, E_a, E_z, dlogEdloga, Ωma,
-    D_z, f_z, D_f_z,
-    r_z,
-    dA_z,
-    dL_z,
-    ρc_z, Ωtot_z,
-    # Neutrino functions
-    F, dFdy, ΩνE2,
-    # Growth solver
-    growth_solver, growth_ode_system
-)
+# Handle different jaxace versions that may export Ωma or Ωm_a
+try:
+    from jaxace.background import (
+        W0WaCDMCosmology,
+        a_z, E_a, E_z, dlogEdloga, Ωma,
+        D_z, f_z, D_f_z,
+        r_z,
+        dA_z,
+        dL_z,
+        ρc_z, Ωtot_z,
+        # Neutrino functions
+        F, dFdy, ΩνE2,
+        # Growth solver
+        growth_solver, growth_ode_system
+    )
+    Ωm_a = Ωma  # Create alias for compatibility
+except ImportError:
+    # Try alternative import for different jaxace versions
+    from jaxace.background import (
+        W0WaCDMCosmology,
+        a_z, E_a, E_z, dlogEdloga, Ωm_a,
+        D_z, f_z, D_f_z,
+        r_z,
+        dA_z,
+        dL_z,
+        ρc_z, Ωtot_z,
+        # Neutrino functions
+        F, dFdy, ΩνE2,
+        # Growth solver
+        growth_solver, growth_ode_system
+    )
+    Ωma = Ωm_a  # Create reverse alias
 
 # Create aliases for compatibility
 D_z_from_cosmo = D_z
@@ -32,7 +51,6 @@ D_f_z_from_cosmo = D_f_z
 r_z_from_cosmo = r_z
 dA_z_from_cosmo = dA_z
 dL_z_from_cosmo = dL_z
-Ωm_a = Ωma  # Alias for test compatibility
 
 jax.config.update("jax_enable_x64", True)
 
