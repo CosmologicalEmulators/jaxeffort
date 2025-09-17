@@ -330,7 +330,17 @@ class TestJacobianWithRealEmulator:
                 pytest.skip("Real emulator not available (not downloaded)")
 
             # Define realistic test inputs
-            biases = jnp.array([1.5, 0.5, -0.2, 0.1])
+            # Real PyBird emulator expects 8 bias parameters: [b1, b2, b3, b4, b5, b6, b7, f]
+            biases = jnp.array([
+                1.5,    # b1 - linear bias
+                0.5,    # b2 - second-order bias
+                -0.2,   # b3 - third-order bias
+                0.1,    # b4 - fourth-order bias
+                0.0,    # b5 - fifth-order bias
+                0.0,    # b6 - sixth-order bias
+                0.0,    # b7 - seventh-order bias
+                0.8     # f - growth rate parameter
+            ])
             cosmology = jnp.array([
                 0.5,     # z (redshift) - note: real emulator might expect z first
                 3.05,    # ln(10^10 A_s)
