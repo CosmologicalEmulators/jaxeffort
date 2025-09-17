@@ -57,7 +57,7 @@ trained_emulators = {}
 # This can be easily extended with new models in the future
 EMULATOR_CONFIGS = {
     "pybird_mnuw0wacdm": {
-        "zenodo_url": "https://zenodo.org/records/17138352/files/trained_effort_pybird_mnuw0wacdm.tar.gz?download=1",
+        "zenodo_url": "https://zenodo.org/records/17138475/files/trained_effort_pybird_mnuw0wacdm.tar.gz?download=1",
         "description": "PyBird emulator for massive neutrinos, w0wa CDM cosmology",
         "has_noise": False,  # Set to True if the emulator includes noise (st/) component
     }
@@ -86,7 +86,7 @@ def _load_emulator_set(model_name: str, config: dict, auto_download: bool = True
     Returns
     -------
     dict
-        Dictionary containing the loaded multipole emulator
+        Dictionary containing the loaded multipole emulators
     """
     emulator_dict = {}
 
@@ -98,33 +98,38 @@ def _load_emulator_set(model_name: str, config: dict, auto_download: bool = True
             expected_checksum=config.get("checksum")
         )
 
-        # Download if needed and requested
-        if auto_download:
-            emulator_path = fetcher.get_emulator_path(download_if_missing=True)
-        else:
-            emulator_path = fetcher.get_emulator_path(download_if_missing=False)
+        # Get multipole paths
+        multipole_paths = fetcher.get_multipole_paths(download_if_missing=auto_download)
 
-        if emulator_path and emulator_path.exists():
-            # Load the appropriate emulator type
-            try:
-                if config.get("has_noise", False):
-                    # Load multipole emulator with noise component
-                    emulator_dict["multipole_noise"] = load_multipole_noise_emulator(str(emulator_path))
-                    emulator_dict["type"] = "multipole_noise"
-                else:
-                    # Load standard multipole emulator
-                    emulator_dict["multipole"] = load_multipole_emulator(str(emulator_path))
-                    emulator_dict["type"] = "multipole"
+        if multipole_paths:
+            # Load each multipole emulator
+            multipole_emulators = {}
+            loaded_count = 0
 
-                emulator_dict["path"] = str(emulator_path)
+            for l, mp_path in multipole_paths.items():
+                if mp_path and mp_path.exists():
+                    try:
+                        if config.get("has_noise", False):
+                            # Load multipole emulator with noise component
+                            multipole_emulators[l] = load_multipole_noise_emulator(str(mp_path))
+                        else:
+                            # Load standard multipole emulator
+                            multipole_emulators[l] = load_multipole_emulator(str(mp_path))
+                        loaded_count += 1
+                    except Exception as e:
+                        warnings.warn(f"Error loading multipole l={l} from {mp_path}: {e}")
+
+            if loaded_count > 0:
+                emulator_dict["multipoles"] = multipole_emulators
+                emulator_dict["type"] = "multipole_noise" if config.get("has_noise", False) else "multipole"
                 emulator_dict["loaded"] = True
-
-            except Exception as e:
-                warnings.warn(f"Error loading emulators from {emulator_path}: {e}")
+                emulator_dict["path"] = str(fetcher.emulators_dir)
+                emulator_dict["loaded_multipoles"] = list(multipole_emulators.keys())
+            else:
+                warnings.warn(f"No multipole emulators loaded for {model_name}")
                 emulator_dict["loaded"] = False
-                emulator_dict["error"] = str(e)
         else:
-            warnings.warn(f"Could not find emulator data for {model_name}")
+            warnings.warn(f"Could not find multipole emulator data for {model_name}")
             emulator_dict["loaded"] = False
 
     except Exception as e:
@@ -152,7 +157,8 @@ if not os.environ.get("JAXEFFORT_NO_AUTO_DOWNLOAD"):
             # Report loading status
             if trained_emulators[model_name].get("loaded"):
                 emulator_type = trained_emulators[model_name].get("type", "unknown")
-                print(f"  ✓ {model_name}: Loaded {emulator_type} emulator")
+                loaded_ls = trained_emulators[model_name].get("loaded_multipoles", [])
+                print(f"  ✓ {model_name}: Loaded {emulator_type} emulators for l={loaded_ls}")
             else:
                 warnings.warn(f"Failed to load emulator for {model_name}")
 
@@ -266,20 +272,52 @@ def reload_emulators(model_name: str = None):
     return trained_emulators
 
 
-def get_default_emulator():
+def get_default_emulator(l: int = None):
     """
     Get the default loaded multipole emulator.
 
+    Parameters
+    ----------
+    l : int, optional
+        Specific multipole (0, 2, or 4). If None, returns all multipoles.
+
     Returns
     -------
-    MultipoleEmulators or MultipoleNoiseEmulator
-        The default loaded emulator, or None if not loaded
+    MultipoleEmulators, MultipoleNoiseEmulator, or dict
+        The default loaded emulator(s), or None if not loaded
     """
     # Return the first successfully loaded emulator
     for model_name, emulator_data in trained_emulators.items():
         if emulator_data.get("loaded"):
-            if emulator_data["type"] == "multipole_noise":
-                return emulator_data["multipole_noise"]
-            elif emulator_data["type"] == "multipole":
-                return emulator_data["multipole"]
+            multipoles = emulator_data.get("multipoles", {})
+            if l is not None:
+                # Return specific multipole
+                return multipoles.get(l)
+            else:
+                # Return all multipoles
+                return multipoles
+    return None
+
+
+def get_multipole_emulator(model_name: str = "pybird_mnuw0wacdm", l: int = 0):
+    """
+    Get a specific multipole emulator.
+
+    Parameters
+    ----------
+    model_name : str
+        Name of the model
+    l : int
+        Multipole order (0, 2, or 4)
+
+    Returns
+    -------
+    MultipoleEmulators or MultipoleNoiseEmulator
+        The requested multipole emulator, or None if not loaded
+    """
+    if model_name in trained_emulators:
+        emulator_data = trained_emulators[model_name]
+        if emulator_data.get("loaded"):
+            multipoles = emulator_data.get("multipoles", {})
+            return multipoles.get(l)
     return None

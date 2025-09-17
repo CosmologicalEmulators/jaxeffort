@@ -183,8 +183,8 @@ class MultipoleDataFetcher:
         Verify the expected multipole emulator structure.
 
         Expects folders like:
-        - monoquad_l0l2/  (monopole and quadrupole)
-        - hexa_l4/ (hexadecapole, if present)
+        - 0/, 2/, 4/  (monopole, quadrupole, hexadecapole)
+        Each containing: 11/, loop/, ct/ subfolders
 
         Or the standard component structure:
         - 11/, loop/, ct/ (and optionally st/)
@@ -201,19 +201,26 @@ class MultipoleDataFetcher:
         bool
             True if valid structure found
         """
-        # Check for multipole-named folders
-        multipole_folders = ['monoquad_l0l2', 'hexa_l4', 'l0l2', 'l4']
+        # Check for numbered multipole folders (0, 2, 4)
+        multipole_folders = ['0', '2', '4']
 
         # Check for standard component folders
         component_folders = ['11', 'loop', 'ct']
 
-        # Look for either multipole or component structure
-        found_multipole = any((base_path / folder).exists() for folder in multipole_folders)
+        # Look for multipole structure (0/, 2/, 4/)
+        found_multipoles = []
+        for mp in multipole_folders:
+            if (base_path / mp).exists():
+                # Check if it has the expected subfolders
+                if all((base_path / mp / comp).exists() for comp in component_folders):
+                    found_multipoles.append(mp)
+
+        # Look for single component structure
         found_components = all((base_path / folder).exists() for folder in component_folders)
 
-        if found_multipole:
+        if found_multipoles:
             if show_progress:
-                print("✓ Found multipole folder structure")
+                print(f"✓ Found multipole folder structure: {', '.join(found_multipoles)}")
             return True
         elif found_components:
             if show_progress:
@@ -223,7 +230,7 @@ class MultipoleDataFetcher:
             if show_progress:
                 print("Warning: Expected folder structure not found")
                 print("Looking for either:")
-                print("  - Multipole folders: monoquad_l0l2/, hexa_l4/")
+                print("  - Multipole folders: 0/, 2/, 4/ (each with 11/, loop/, ct/)")
                 print("  - Component folders: 11/, loop/, ct/")
 
                 # Debug: show what was actually found
@@ -254,7 +261,25 @@ class MultipoleDataFetcher:
         """
         # Check if emulators are already extracted
         if not force and self.emulators_dir.exists():
-            if self._verify_multipole_structure(self.emulators_dir, show_progress=False):
+            # Check for multipole structure
+            multipole_folders = ['0', '2', '4']
+            component_folders = ['11', 'loop', 'ct']
+
+            all_multipoles_exist = True
+            for mp in multipole_folders:
+                mp_path = self.emulators_dir / mp
+                if not mp_path.exists():
+                    all_multipoles_exist = False
+                    break
+                # Check components
+                for comp in component_folders:
+                    if not (mp_path / comp).exists():
+                        all_multipoles_exist = False
+                        break
+                if not all_multipoles_exist:
+                    break
+
+            if all_multipoles_exist:
                 if show_progress:
                     print("Multipole emulator data already available.")
                 return True
@@ -296,33 +321,46 @@ class MultipoleDataFetcher:
                                    show_progress=show_progress)
 
         if success:
-            # Find the actual emulator directory in the extracted files
-            # It might be nested or have a different name
+            # Find the directory containing multipole folders (0/, 2/, 4/)
             emulator_root = None
 
-            # Look for the expected structure in extracted files
-            for item in temp_extract.rglob("*"):
-                if item.is_dir():
-                    if self._verify_multipole_structure(item, show_progress=False):
-                        emulator_root = item
-                        break
+            # First, check if temp_extract itself has the multipole folders
+            multipole_folders = ['0', '2', '4']
+            if any((temp_extract / mp).exists() for mp in multipole_folders):
+                emulator_root = temp_extract
+            else:
+                # Look for a subdirectory containing the multipole folders
+                for item in temp_extract.iterdir():
+                    if item.is_dir():
+                        if any((item / mp).exists() for mp in multipole_folders):
+                            emulator_root = item
+                            break
 
             if emulator_root:
-                # Move to final destination
+                # Create final destination if needed
                 if self.emulators_dir.exists():
                     shutil.rmtree(self.emulators_dir)
-                shutil.move(str(emulator_root), str(self.emulators_dir))
+                self.emulators_dir.mkdir(parents=True, exist_ok=True)
+
+                # Copy each multipole folder to the final destination
+                for mp in multipole_folders:
+                    src_mp = emulator_root / mp
+                    if src_mp.exists():
+                        dest_mp = self.emulators_dir / mp
+                        shutil.copytree(str(src_mp), str(dest_mp))
+                        if show_progress:
+                            print(f"  ✓ Copied multipole l={mp} emulator")
 
                 # Clean up temp directory
                 if temp_extract.exists():
                     shutil.rmtree(temp_extract)
 
                 if show_progress:
-                    print(f"✓ Multipole emulator data ready at: {self.emulators_dir}")
+                    print(f"✓ All multipole emulator data ready at: {self.emulators_dir}")
                 return True
             else:
                 if show_progress:
-                    print("Error: Could not find valid emulator structure in extracted files")
+                    print("Error: Could not find multipole folders (0/, 2/, 4/) in extracted files")
                 # Clean up
                 if temp_extract.exists():
                     shutil.rmtree(temp_extract)
@@ -344,8 +382,11 @@ class MultipoleDataFetcher:
         Path or None
             Path to the emulator directory, or None if not available
         """
-        if self.emulators_dir.exists() and self._verify_multipole_structure(self.emulators_dir, show_progress=False):
-            return self.emulators_dir
+        if self.emulators_dir.exists():
+            # Check if all multipole folders exist
+            multipole_folders = ['0', '2', '4']
+            if all((self.emulators_dir / mp).exists() for mp in multipole_folders):
+                return self.emulators_dir
 
         # Download and extract if requested
         if download_if_missing:
@@ -353,6 +394,35 @@ class MultipoleDataFetcher:
             if success and self.emulators_dir.exists():
                 return self.emulators_dir
 
+        return None
+
+    def get_multipole_paths(self, download_if_missing: bool = True) -> Optional[Dict[int, Path]]:
+        """
+        Get paths to individual multipole emulator directories.
+
+        Parameters
+        ----------
+        download_if_missing : bool
+            Whether to download the data if not cached
+
+        Returns
+        -------
+        dict or None
+            Dictionary mapping multipole l values (0, 2, 4) to their paths,
+            or None if not available
+        """
+        base_path = self.get_emulator_path(download_if_missing)
+        if base_path is None:
+            return None
+
+        multipole_paths = {}
+        for l in [0, 2, 4]:
+            mp_path = base_path / str(l)
+            if mp_path.exists():
+                multipole_paths[l] = mp_path
+
+        if len(multipole_paths) == 3:  # All three multipoles found
+            return multipole_paths
         return None
 
     def clear_cache(self):
@@ -401,7 +471,7 @@ def get_fetcher(zenodo_url: str = None,
 
     # Use defaults for get_fetcher to maintain backward compatibility
     if zenodo_url is None:
-        zenodo_url = "https://zenodo.org/records/17138352/files/trained_effort_pybird_mnuw0wacdm.tar.gz?download=1"
+        zenodo_url = "https://zenodo.org/records/17138475/files/trained_effort_pybird_mnuw0wacdm.tar.gz?download=1"
     if emulator_name is None:
         emulator_name = "pybird_mnuw0wacdm"
 
@@ -420,3 +490,15 @@ def get_emulator_path() -> Optional[Path]:
         Path to the emulator directory
     """
     return get_fetcher().get_emulator_path()
+
+
+def get_multipole_paths() -> Optional[Dict[int, Path]]:
+    """
+    Get paths to individual multipole emulator directories.
+
+    Returns
+    -------
+    dict or None
+        Dictionary mapping multipole l values (0, 2, 4) to their paths
+    """
+    return get_fetcher().get_multipole_paths()
