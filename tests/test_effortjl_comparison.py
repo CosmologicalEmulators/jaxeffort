@@ -57,7 +57,7 @@ class TestEffortJLComparison:
         import jaxeffort
 
         # Get the real l=0 (monopole) emulator
-        emulator = jaxeffort.get_multipole_emulator("pybird_mnuw0wacdm", l=0)
+        emulator = jaxeffort.trained_emulators["pybird_mnuw0wacdm"]["0"]
         if emulator is None:
             pytest.skip("Monopole (l=0) emulator not available (not downloaded)")
 
@@ -139,7 +139,7 @@ class TestEffortJLComparison:
         import jaxeffort
 
         # Get the l=0 (monopole) emulator
-        emulator = jaxeffort.get_multipole_emulator("pybird_mnuw0wacdm", l=0)
+        emulator = jaxeffort.trained_emulators["pybird_mnuw0wacdm"]["0"]
         if emulator is None:
             pytest.skip("Monopole (l=0) emulator not available")
 
@@ -179,7 +179,7 @@ class TestEffortJLComparison:
         import jaxeffort
 
         # Get the l=0 (monopole) emulator
-        emulator = jaxeffort.get_multipole_emulator("pybird_mnuw0wacdm", l=0)
+        emulator = jaxeffort.trained_emulators["pybird_mnuw0wacdm"]["0"]
         if emulator is None:
             pytest.skip("Monopole (l=0) emulator not available")
 
@@ -206,7 +206,7 @@ class TestEffortJLComparison:
         import jaxeffort
 
         # Get the l=2 (quadrupole) emulator
-        emulator = jaxeffort.get_multipole_emulator("pybird_mnuw0wacdm", l=2)
+        emulator = jaxeffort.trained_emulators["pybird_mnuw0wacdm"]["2"]
         if emulator is None:
             pytest.skip("Quadrupole (l=2) emulator not available (not downloaded)")
 
@@ -260,7 +260,7 @@ class TestEffortJLComparison:
         import jaxeffort
 
         # Get the l=4 (hexadecapole) emulator
-        emulator = jaxeffort.get_multipole_emulator("pybird_mnuw0wacdm", l=4)
+        emulator = jaxeffort.trained_emulators["pybird_mnuw0wacdm"]["4"]
         if emulator is None:
             pytest.skip("Hexadecapole (l=4) emulator not available (not downloaded)")
 

@@ -117,26 +117,43 @@ class MLP:
         return self.emulator.run_emulator(x)
 
     def get_component(self, input, D):
-        """Get raw component output without bias contraction, matching Effort.jl's get_component."""
-        norm_input = self.maximin(input)
-        norm_model_output = self.emulator.run_emulator(norm_input)
-        model_output = self.inv_maximin(norm_model_output)
+        """
+        Get raw component output without bias contraction, matching Effort.jl's get_component.
 
-        # Try to call postprocessing with emulator parameter (for tests)
-        # Fall back to 3-parameter version (for actual emulators)
-        import inspect
-        sig = inspect.signature(self.postprocessing)
-        if len(sig.parameters) == 4:
-            # Test version with emulator parameter
-            processed_model_output = self.postprocessing(input, model_output, D, self)
-        else:
-            # Production version without emulator parameter
-            processed_model_output = self.postprocessing(input, model_output, D)
+        This method delegates to a JIT-compiled implementation.
+        """
+        # Check postprocessing signature once and create appropriate JIT function
+        if not hasattr(self, '_jit_get_component'):
+            import inspect
+            sig = inspect.signature(self.postprocessing)
+            if len(sig.parameters) == 4:
+                # Test version with emulator parameter
+                @partial(jax.jit, static_argnums=(0,))
+                def _jit_get_component_with_emulator(self, input, D):
+                    norm_input = self.maximin(input)
+                    norm_model_output = self.emulator.run_emulator(norm_input)
+                    model_output = self.inv_maximin(norm_model_output)
+                    processed_model_output = self.postprocessing(input, model_output, D, self)
+                    reshaped_output = processed_model_output.reshape(
+                        (len(self.k_grid), int(len(processed_model_output) / len(self.k_grid))), order="F"
+                    )
+                    return reshaped_output
+                self._jit_get_component = _jit_get_component_with_emulator
+            else:
+                # Production version without emulator parameter
+                @partial(jax.jit, static_argnums=(0,))
+                def _jit_get_component_standard(self, input, D):
+                    norm_input = self.maximin(input)
+                    norm_model_output = self.emulator.run_emulator(norm_input)
+                    model_output = self.inv_maximin(norm_model_output)
+                    processed_model_output = self.postprocessing(input, model_output, D)
+                    reshaped_output = processed_model_output.reshape(
+                        (len(self.k_grid), int(len(processed_model_output) / len(self.k_grid))), order="F"
+                    )
+                    return reshaped_output
+                self._jit_get_component = _jit_get_component_standard
 
-        reshaped_output = processed_model_output.reshape(
-            (len(self.k_grid), int(len(processed_model_output) / len(self.k_grid))), order="F"
-        )
-        return reshaped_output
+        return self._jit_get_component(self, input, D)
 
 
 class MultipoleEmulators:
@@ -155,9 +172,12 @@ class MultipoleEmulators:
         self.Pct = Pct
         self.bias_contraction = bias_contraction
 
+    @partial(jax.jit, static_argnums=(0,))
     def get_multipole_components(self, inputs: np.array, D) -> Tuple[np.array, np.array, np.array]:
         """
         Computes the raw component outputs for all three emulators given an input array.
+
+        This method is JIT-compiled for performance.
 
         Args:
             inputs (np.array): Input data to the emulators.
@@ -176,15 +196,22 @@ class MultipoleEmulators:
         """
         Get P_ℓ using the multipole's bias contraction function.
         Matches Effort.jl where BiasContraction is at PℓEmulator level only.
+
+        This method uses JIT compilation for performance.
         """
         if self.bias_contraction is None:
             raise ValueError("biascontraction is required to compute P_ℓ with biases")
 
-        P11_comp, Ploop_comp, Pct_comp = self.get_multipole_components(cosmology, D)
-        stacked_array = jnp.hstack((P11_comp, Ploop_comp, Pct_comp))
+        # Create JIT-compiled version on first call
+        if not hasattr(self, '_jit_get_Pl'):
+            @partial(jax.jit, static_argnums=(0,))
+            def _jit_get_Pl(self, cosmology, biases, D):
+                P11_comp, Ploop_comp, Pct_comp = self.get_multipole_components(cosmology, D)
+                stacked_array = jnp.hstack((P11_comp, Ploop_comp, Pct_comp))
+                return self.bias_contraction(biases, stacked_array)
+            self._jit_get_Pl = _jit_get_Pl
 
-        # Use multipole-level bias contraction (matches Effort.jl's PℓEmulator.BiasContraction)
-        return self.bias_contraction(biases, stacked_array)
+        return self._jit_get_Pl(self, cosmology, biases, D)
 
     def get_Pl_no_bias(self, cosmology, D):
         """Get raw components without bias contraction."""
@@ -207,14 +234,24 @@ class MultipoleNoiseEmulator:
         self.bias_contraction = bias_contraction
 
     def get_Pl(self, cosmology, biases, D):
-        """Get P_ℓ with noise, using bias contraction."""
-        # Get all components
-        P11_comp, Ploop_comp, Pct_comp = self.multipole_emulator.get_multipole_components(cosmology, D)
-        Noise_comp = self.noise_emulator.get_component(cosmology, D)
-        stacked_array = jnp.hstack((P11_comp, Ploop_comp, Pct_comp, Noise_comp))
+        """
+        Get P_ℓ with noise, using bias contraction.
 
-        # Use the overall bias contraction
-        return self.bias_contraction(biases, stacked_array)
+        This method uses JIT compilation for performance.
+        """
+        # Create JIT-compiled version on first call
+        if not hasattr(self, '_jit_get_Pl'):
+            @partial(jax.jit, static_argnums=(0,))
+            def _jit_get_Pl(self, cosmology, biases, D):
+                # Get all components
+                P11_comp, Ploop_comp, Pct_comp = self.multipole_emulator.get_multipole_components(cosmology, D)
+                Noise_comp = self.noise_emulator.get_component(cosmology, D)
+                stacked_array = jnp.hstack((P11_comp, Ploop_comp, Pct_comp, Noise_comp))
+                # Use the overall bias contraction
+                return self.bias_contraction(biases, stacked_array)
+            self._jit_get_Pl = _jit_get_Pl
+
+        return self._jit_get_Pl(self, cosmology, biases, D)
 
     def get_Pl_no_bias(self, cosmology, D):
         """Get raw components without bias contraction."""

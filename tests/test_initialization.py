@@ -30,11 +30,13 @@ class TestNoAutoDownload:
             import jaxeffort
             importlib.reload(jaxeffort)
 
-            # Check that emulators are marked as disabled
+            # Check that emulators have None values when disabled
             for model_name in jaxeffort.EMULATOR_CONFIGS:
                 assert model_name in jaxeffort.trained_emulators
-                assert not jaxeffort.trained_emulators[model_name].get("loaded", False)
-                assert jaxeffort.trained_emulators[model_name].get("disabled", False)
+                # Should have keys "0", "2", "4" all set to None
+                assert jaxeffort.trained_emulators[model_name]["0"] is None
+                assert jaxeffort.trained_emulators[model_name]["2"] is None
+                assert jaxeffort.trained_emulators[model_name]["4"] is None
 
         finally:
             # Restore environment
@@ -88,7 +90,9 @@ class TestDynamicEmulatorConfig:
         result = jaxeffort.reload_emulators("pybird_mnuw0wacdm")
 
         assert "pybird_mnuw0wacdm" in result
-        assert result["pybird_mnuw0wacdm"].get("loaded", False)
+        # Check if at least one multipole is loaded (new structure)
+        loaded = sum(1 for v in result["pybird_mnuw0wacdm"].values() if v is not None)
+        assert loaded > 0
 
     def test_reload_emulators_unknown_model(self):
         """Test reloading an unknown model raises error."""
@@ -113,42 +117,35 @@ class TestEmulatorAccessFunctions:
     """Test emulator access functions and edge cases."""
 
     def test_get_default_emulator_with_multipole(self):
-        """Test getting default emulator for specific multipole."""
+        """Test accessing emulators through trained_emulators dict."""
         import jaxeffort
 
-        # Get l=0 emulator
-        emulator = jaxeffort.get_default_emulator(l=0)
-        assert emulator is not None
+        # Get l=0 emulator via new simplified structure
+        emulator_0 = jaxeffort.trained_emulators["pybird_mnuw0wacdm"]["0"]
+        assert emulator_0 is not None
 
         # Get l=2 emulator
-        emulator = jaxeffort.get_default_emulator(l=2)
-        assert emulator is not None
+        emulator_2 = jaxeffort.trained_emulators["pybird_mnuw0wacdm"]["2"]
+        assert emulator_2 is not None
 
-        # Get all multipoles
-        emulators = jaxeffort.get_default_emulator(l=None)
-        assert emulators is not None
-        assert 0 in emulators
-        assert 2 in emulators
-        assert 4 in emulators
+        # Get l=4 emulator
+        emulator_4 = jaxeffort.trained_emulators["pybird_mnuw0wacdm"]["4"]
+        assert emulator_4 is not None
 
     def test_get_multipole_emulator_missing_model(self):
-        """Test get_multipole_emulator with missing model."""
+        """Test accessing non-existent model."""
         import jaxeffort
 
-        emulator = jaxeffort.get_multipole_emulator("nonexistent_model", l=0)
-        assert emulator is None
+        # Try to access a model that doesn't exist
+        assert "nonexistent_model" not in jaxeffort.trained_emulators
 
     def test_get_multipole_emulator_missing_multipole(self):
-        """Test get_multipole_emulator with invalid multipole."""
+        """Test accessing invalid multipole."""
         import jaxeffort
 
-        # Temporarily modify the multipoles to test edge case
-        if "pybird_mnuw0wacdm" in jaxeffort.trained_emulators:
-            emulator_data = jaxeffort.trained_emulators["pybird_mnuw0wacdm"]
-            if emulator_data.get("loaded") and "multipoles" in emulator_data:
-                # Try to get a non-existent multipole
-                emulator = jaxeffort.get_multipole_emulator("pybird_mnuw0wacdm", l=6)
-                assert emulator is None
+        # The dictionary only has "0", "2", "4" keys
+        # Accessing a non-existent key would raise KeyError
+        assert "6" not in jaxeffort.trained_emulators["pybird_mnuw0wacdm"]
 
 
 class TestEmulatorLoadingErrors:
@@ -170,4 +167,7 @@ class TestEmulatorLoadingErrors:
         with patch('jaxeffort.data_fetcher.MultipoleDataFetcher.get_multipole_paths', return_value=None):
             result = _load_emulator_set("bad_model", bad_config, auto_download=False)
 
-            assert not result.get("loaded", False)
+            # Should return dict with None values
+            assert result["0"] is None
+            assert result["2"] is None
+            assert result["4"] is None

@@ -86,9 +86,9 @@ def _load_emulator_set(model_name: str, config: dict, auto_download: bool = True
     Returns
     -------
     dict
-        Dictionary containing the loaded multipole emulators
+        Dictionary with string keys ("0", "2", "4") mapping to multipole emulators
     """
-    emulator_dict = {}
+    emulators = {}
 
     try:
         # Initialize fetcher for this model
@@ -102,42 +102,36 @@ def _load_emulator_set(model_name: str, config: dict, auto_download: bool = True
         multipole_paths = fetcher.get_multipole_paths(download_if_missing=auto_download)
 
         if multipole_paths:
-            # Load each multipole emulator
-            multipole_emulators = {}
-            loaded_count = 0
-
+            # Load each multipole emulator with string keys
             for l, mp_path in multipole_paths.items():
                 if mp_path and mp_path.exists():
                     try:
                         if config.get("has_noise", False):
                             # Load multipole emulator with noise component
-                            multipole_emulators[l] = load_multipole_noise_emulator(str(mp_path))
+                            emulators[str(l)] = load_multipole_noise_emulator(str(mp_path))
                         else:
                             # Load standard multipole emulator
-                            multipole_emulators[l] = load_multipole_emulator(str(mp_path))
-                        loaded_count += 1
+                            emulators[str(l)] = load_multipole_emulator(str(mp_path))
                     except Exception as e:
+                        emulators[str(l)] = None
                         warnings.warn(f"Error loading multipole l={l} from {mp_path}: {e}")
+                else:
+                    emulators[str(l)] = None
 
-            if loaded_count > 0:
-                emulator_dict["multipoles"] = multipole_emulators
-                emulator_dict["type"] = "multipole_noise" if config.get("has_noise", False) else "multipole"
-                emulator_dict["loaded"] = True
-                emulator_dict["path"] = str(fetcher.emulators_dir)
-                emulator_dict["loaded_multipoles"] = list(multipole_emulators.keys())
-            else:
+            loaded = sum(1 for v in emulators.values() if v is not None)
+            if loaded == 0:
                 warnings.warn(f"No multipole emulators loaded for {model_name}")
-                emulator_dict["loaded"] = False
         else:
             warnings.warn(f"Could not find multipole emulator data for {model_name}")
-            emulator_dict["loaded"] = False
+            # Create empty entries for expected multipoles
+            emulators = {"0": None, "2": None, "4": None}
 
     except Exception as e:
         warnings.warn(f"Could not initialize {model_name}: {e}")
-        emulator_dict["loaded"] = False
-        emulator_dict["error"] = str(e)
+        # Create empty entries for expected multipoles
+        emulators = {"0": None, "2": None, "4": None}
 
-    return emulator_dict
+    return emulators
 
 
 # Load default emulators on import (unless disabled)
@@ -155,21 +149,22 @@ if not os.environ.get("JAXEFFORT_NO_AUTO_DOWNLOAD"):
             )
 
             # Report loading status
-            if trained_emulators[model_name].get("loaded"):
-                emulator_type = trained_emulators[model_name].get("type", "unknown")
-                loaded_ls = trained_emulators[model_name].get("loaded_multipoles", [])
-                print(f"  ✓ {model_name}: Loaded {emulator_type} emulators for l={loaded_ls}")
+            loaded = sum(1 for v in trained_emulators[model_name].values() if v is not None)
+            total = 3  # Expecting multipoles 0, 2, 4
+            if loaded > 0:
+                loaded_ls = [k for k, v in trained_emulators[model_name].items() if v is not None]
+                print(f"  {model_name}: Loaded {loaded}/{total} multipoles (l={loaded_ls})")
             else:
-                warnings.warn(f"Failed to load emulator for {model_name}")
+                warnings.warn(f"Failed to load any multipoles for {model_name}")
 
         except Exception as e:
             # Ensure import doesn't fail completely
             warnings.warn(f"Failed to load {model_name} emulators: {e}")
-            trained_emulators[model_name] = {"loaded": False, "error": str(e)}
+            trained_emulators[model_name] = {"0": None, "2": None, "4": None}
 else:
     # Create empty structure when auto-download is disabled
     for model_name, config in EMULATOR_CONFIGS.items():
-        trained_emulators[model_name] = {"loaded": False, "disabled": True}
+        trained_emulators[model_name] = {"0": None, "2": None, "4": None}
 
 
 def add_emulator_config(model_name: str,
@@ -224,14 +219,14 @@ def add_emulator_config(model_name: str,
         )
 
         # Report status
-        if trained_emulators[model_name].get("loaded"):
-            emulator_type = trained_emulators[model_name].get("type", "unknown")
-            print(f"  ✓ Loaded {emulator_type} emulator")
+        loaded = sum(1 for v in trained_emulators[model_name].values() if v is not None)
+        if loaded > 0:
+            print(f"  ✓ Loaded {loaded}/3 multipoles")
         else:
             print(f"  ✗ Failed to load emulator")
     else:
         # Create empty structure
-        trained_emulators[model_name] = {"loaded": False}
+        trained_emulators[model_name] = {"0": None, "2": None, "4": None}
 
     return trained_emulators[model_name]
 
@@ -272,52 +267,3 @@ def reload_emulators(model_name: str = None):
     return trained_emulators
 
 
-def get_default_emulator(l: int = None):
-    """
-    Get the default loaded multipole emulator.
-
-    Parameters
-    ----------
-    l : int, optional
-        Specific multipole (0, 2, or 4). If None, returns all multipoles.
-
-    Returns
-    -------
-    MultipoleEmulators, MultipoleNoiseEmulator, or dict
-        The default loaded emulator(s), or None if not loaded
-    """
-    # Return the first successfully loaded emulator
-    for model_name, emulator_data in trained_emulators.items():
-        if emulator_data.get("loaded"):
-            multipoles = emulator_data.get("multipoles", {})
-            if l is not None:
-                # Return specific multipole
-                return multipoles.get(l)
-            else:
-                # Return all multipoles
-                return multipoles
-    return None
-
-
-def get_multipole_emulator(model_name: str = "pybird_mnuw0wacdm", l: int = 0):
-    """
-    Get a specific multipole emulator.
-
-    Parameters
-    ----------
-    model_name : str
-        Name of the model
-    l : int
-        Multipole order (0, 2, or 4)
-
-    Returns
-    -------
-    MultipoleEmulators or MultipoleNoiseEmulator
-        The requested multipole emulator, or None if not loaded
-    """
-    if model_name in trained_emulators:
-        emulator_data = trained_emulators[model_name]
-        if emulator_data.get("loaded"):
-            multipoles = emulator_data.get("multipoles", {})
-            return multipoles.get(l)
-    return None
