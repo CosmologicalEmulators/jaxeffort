@@ -121,7 +121,7 @@ class MLP:
         norm_input = self.maximin(input)
         norm_model_output = self.emulator.run_emulator(norm_input)
         model_output = self.inv_maximin(norm_model_output)
-        processed_model_output = self.postprocessing(input, model_output, D, self)
+        processed_model_output = self.postprocessing(input, model_output, D)
         reshaped_output = processed_model_output.reshape(
             (len(self.k_grid), int(len(processed_model_output) / len(self.k_grid))), order="F"
         )
