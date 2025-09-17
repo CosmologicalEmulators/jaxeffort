@@ -121,7 +121,18 @@ class MLP:
         norm_input = self.maximin(input)
         norm_model_output = self.emulator.run_emulator(norm_input)
         model_output = self.inv_maximin(norm_model_output)
-        processed_model_output = self.postprocessing(input, model_output, D)
+
+        # Try to call postprocessing with emulator parameter (for tests)
+        # Fall back to 3-parameter version (for actual emulators)
+        import inspect
+        sig = inspect.signature(self.postprocessing)
+        if len(sig.parameters) == 4:
+            # Test version with emulator parameter
+            processed_model_output = self.postprocessing(input, model_output, D, self)
+        else:
+            # Production version without emulator parameter
+            processed_model_output = self.postprocessing(input, model_output, D)
+
         reshaped_output = processed_model_output.reshape(
             (len(self.k_grid), int(len(processed_model_output) / len(self.k_grid))), order="F"
         )
