@@ -271,3 +271,80 @@ def BiasContraction(biases, stacked_array):
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+class TestBackwardCompatibility:
+    """Test backward compatibility methods."""
+
+    def test_mlp_apply_method(self, tmp_path):
+        """Test MLP.apply method for backward compatibility."""
+        from jaxeffort import load_multipole_emulator
+        from tests.fixtures.mock_emulator_data import create_mock_emulator_directory
+
+        # Create mock emulator
+        emulator_path = create_mock_emulator_directory(tmp_path)
+        emulator = load_multipole_emulator(str(emulator_path))
+
+        # Test apply method (backward compatibility)
+        x = jnp.ones(8)  # Mock emulator expects 8 inputs
+        params = {}  # Not used but required for signature
+        result = emulator.P11.apply(params, x)
+        assert result is not None
+
+
+class TestBiasContractionLoading:
+    """Test different bias contraction loading scenarios."""
+
+    def test_load_bias_contraction_lowercase(self, tmp_path):
+        """Test loading bias contraction with lowercase name."""
+        from jaxeffort.jaxeffort import load_bias_contraction
+
+        # Create a file with lowercase biascontraction
+        bc_file = tmp_path / "biascontraction.py"
+        bc_file.write_text("""def biascontraction(biases, array):
+    return biases @ array
+""")
+
+        # This should load the lowercase version
+        bc_func = load_bias_contraction(str(tmp_path), required=True)
+        assert bc_func is not None
+        assert callable(bc_func)
+
+    def test_load_bias_contraction_missing_optional(self, tmp_path):
+        """Test loading missing bias contraction when optional."""
+        from jaxeffort.jaxeffort import load_bias_contraction
+
+        # Don't create the file - test missing file case
+        # This should return None when optional
+        bc_func = load_bias_contraction(str(tmp_path), required=False)
+        assert bc_func is None
+
+    def test_missing_bias_contraction_error(self):
+        """Test error when bias contraction is missing but required."""
+        from jaxeffort.jaxeffort import MultipoleEmulators, MLP
+        from unittest.mock import MagicMock
+
+        # Create mock MLPs
+        mock_p11 = MagicMock(spec=MLP)
+        mock_ploop = MagicMock(spec=MLP)
+        mock_pct = MagicMock(spec=MLP)
+
+        # Set up mock return values with proper shape
+        mock_p11.get_component.return_value = jnp.ones((74, 6))
+        mock_ploop.get_component.return_value = jnp.ones((74, 6))
+        mock_pct.get_component.return_value = jnp.ones((74, 6))
+
+        # Create MultipoleEmulators without bias contraction
+        emulator = MultipoleEmulators(
+            P11=mock_p11,
+            Ploop=mock_ploop,
+            Pct=mock_pct,
+            bias_contraction=None  # Missing bias contraction
+        )
+
+        # This should raise an error when trying to compute with biases
+        cosmology = jnp.ones(9)
+        biases = jnp.ones(4)
+        D = 1.0
+
+        with pytest.raises(ValueError, match="biascontraction is required"):
+            emulator.get_Pl(cosmology, biases, D)

@@ -177,6 +177,9 @@ class MultipoleEmulators:
         Get P_ℓ using the multipole's bias contraction function.
         Matches Effort.jl where BiasContraction is at PℓEmulator level only.
         """
+        if self.bias_contraction is None:
+            raise ValueError("biascontraction is required to compute P_ℓ with biases")
+
         P11_comp, Ploop_comp, Pct_comp = self.get_multipole_components(cosmology, D)
         stacked_array = jnp.hstack((P11_comp, Ploop_comp, Pct_comp))
 
