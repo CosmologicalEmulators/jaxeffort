@@ -47,17 +47,12 @@ class TestEffortJLComparison:
 
         return jnp.array(values, dtype=jnp.float64)
 
-    @pytest.mark.xfail(reason="Output structure differs between jaxeffort and Effort.jl - needs investigation")
     def test_ones_input_comparison(self):
         """
         Test with arrays of ones as input, comparing against Effort.jl reference values.
 
         This test uses the real PyBird emulator and compares the P0 (monopole) output
         against reference values computed by the Effort.jl implementation.
-
-        NOTE: Currently marked as xfail because the output structure and/or processing
-        differs between the implementations. The jaxeffort output is (74, 21) representing
-        bias-contracted components, while Effort.jl produces final monopole/quadrupole values.
         """
         import jaxeffort
 
