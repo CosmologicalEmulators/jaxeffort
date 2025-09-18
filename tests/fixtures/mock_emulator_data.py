@@ -11,7 +11,7 @@ from pathlib import Path
 def create_mock_nn_dict():
     """Create a mock neural network configuration dictionary."""
     return {
-        "n_input_features": 8,
+        "n_input_features": 9,  # 9 cosmology parameters
         "n_output_features": 100,
         "n_hidden_layers": 2,
         "layers": {
@@ -27,7 +27,8 @@ def create_mock_nn_dict():
         "emulator_description": {
             "name": "Mock Emulator",
             "version": "1.0",
-            "type": "test"
+            "type": "test",
+            "parameters": "z, ln10^10 As, ns, H0, omega_b, omega_c, Mnu, w0, wa"
         }
     }
 

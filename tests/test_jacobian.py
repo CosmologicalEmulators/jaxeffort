@@ -49,14 +49,15 @@ class TestJacobianComputation:
         # Define test inputs
         biases = jnp.array([1.5, 0.5, -0.2, 0.1])  # b1, b2, bs2, b3nl
         cosmology = jnp.array([
-            0.025,   # Omega_b * h^2
-            0.120,   # Omega_cdm * h^2
-            0.06,    # M_nu (total neutrino mass in eV)
-            -1.0,    # w_0
-            0.0,     # w_a
-            3.05,    # ln(10^10 A_s)
+            1.0,     # z - redshift
+            3.05,    # ln10^10 As
             0.96,    # n_s
-            0.67     # h
+            67.0,    # H0
+            0.022,   # omega_b
+            0.12,    # omega_c
+            0.06,    # M_nu
+            -1.0,    # w_0
+            0.0      # w_a
         ])
         D = 1.0
 
@@ -88,7 +89,7 @@ class TestJacobianComputation:
         """Test Jacobian computation with respect to bias parameters."""
         # Define test inputs
         biases = jnp.array([1.5, 0.5, -0.2, 0.1])
-        cosmology = jnp.array([0.025, 0.120, 0.06, -1.0, 0.0, 3.05, 0.96, 0.67])
+        cosmology = jnp.array([1.0, 3.05, 0.96, 67.0, 0.022, 0.12, 0.06, -1.0, 0.0])
         D = 1.0
 
         # Define function to differentiate
@@ -115,7 +116,7 @@ class TestJacobianComputation:
         """Test Jacobian computation with respect to growth factor D."""
         # Define test inputs
         biases = jnp.array([1.5, 0.5, -0.2, 0.1])
-        cosmology = jnp.array([0.025, 0.120, 0.06, -1.0, 0.0, 3.05, 0.96, 0.67])
+        cosmology = jnp.array([1.0, 3.05, 0.96, 67.0, 0.022, 0.12, 0.06, -1.0, 0.0])
         D = 1.0
 
         # Define function to differentiate
@@ -144,14 +145,14 @@ class TestJacobianComputation:
         """Test Jacobian computation with respect to combined parameters."""
         # Define test inputs
         biases = jnp.array([1.5, 0.5, -0.2, 0.1])
-        cosmology = jnp.array([0.025, 0.120, 0.06, -1.0, 0.0, 3.05, 0.96, 0.67])
+        cosmology = jnp.array([1.0, 3.05, 0.96, 67.0, 0.022, 0.12, 0.06, -1.0, 0.0])
         D = 1.0
 
         # Combine all parameters into a single vector
         def f_combined(params):
             bias_part = params[:4]
-            cosmo_part = params[4:12]
-            growth_part = params[12]
+            cosmo_part = params[4:13]
+            growth_part = params[13]
             Pl = multipole_emulator.get_Pl(cosmo_part, bias_part, growth_part)
             return Pl.flatten()
 
@@ -176,7 +177,7 @@ class TestJacobianComputation:
         """Test that forward and reverse mode AD give consistent results."""
         # Define test inputs
         biases = jnp.array([1.5, 0.5, -0.2, 0.1])
-        cosmology = jnp.array([0.025, 0.120, 0.06, -1.0, 0.0, 3.05, 0.96, 0.67])
+        cosmology = jnp.array([1.0, 3.05, 0.96, 67.0, 0.022, 0.12, 0.06, -1.0, 0.0])
         D = 1.0
 
         # Define function to differentiate
@@ -218,7 +219,7 @@ class TestNoiseEmulatorJacobian:
         """Test Jacobian computation for noise emulator."""
         # Define test inputs
         biases = jnp.array([1.5, 0.5, -0.2, 0.1])
-        cosmology = jnp.array([0.025, 0.120, 0.06, -1.0, 0.0, 3.05, 0.96, 0.67])
+        cosmology = jnp.array([1.0, 3.05, 0.96, 67.0, 0.022, 0.12, 0.06, -1.0, 0.0])
         D = 1.0
 
         # Define function to differentiate
@@ -256,7 +257,7 @@ class TestJacobianEdgeCases:
     def test_jacobian_at_zero_biases(self, multipole_emulator):
         """Test Jacobian when bias parameters are zero."""
         biases = jnp.array([0.0, 0.0, 0.0, 0.0])
-        cosmology = jnp.array([0.025, 0.120, 0.06, -1.0, 0.0, 3.05, 0.96, 0.67])
+        cosmology = jnp.array([1.0, 3.05, 0.96, 67.0, 0.022, 0.12, 0.06, -1.0, 0.0])
         D = 1.0
 
         def f(bias):
@@ -272,14 +273,15 @@ class TestJacobianEdgeCases:
         biases = jnp.array([1.5, 0.5, -0.2, 0.1])
         # Use extreme but physical values
         cosmology = jnp.array([
-            0.015,   # Low Omega_b * h^2
-            0.150,   # High Omega_cdm * h^2
-            0.3,     # High M_nu
-            -1.5,    # Low w_0
-            0.5,     # Non-zero w_a
+            2.0,     # Higher z
             2.5,     # Low ln(10^10 A_s)
             0.85,    # Low n_s
-            0.5      # Low h
+            50.0,    # Low H0
+            0.015,   # Low omega_b
+            0.150,   # High omega_c
+            0.3,     # High M_nu
+            -1.5,    # Low w_0
+            0.5      # Non-zero w_a
         ])
         D = 0.5
 
@@ -348,16 +350,18 @@ class TestJacobianWithRealEmulator:
                 0.1     # b3nl - third-order non-local bias
             ])
 
-            # Cosmology parameters: Om, Ob, h, ns, s8, mnu, w0, wa
+            # Cosmology parameters: z, ln10^10 As, ns, H0, omega_b, omega_c, Mnu, w0, wa
+            # As per nn_setup.json description
             cosmology = jnp.array([
-                0.3,     # Omega_m (matter density)
-                0.05,    # Omega_b (baryon density)
-                0.7,     # h (Hubble parameter)
-                0.96,    # n_s (spectral index)
-                0.8,     # sigma_8
-                0.06,    # M_nu (neutrino mass)
-                -1.0,    # w0 (dark energy equation of state)
-                0.0      # wa (dark energy evolution)
+                1.0,     # z - redshift
+                3.05,    # ln10^10 As - amplitude of primordial fluctuations
+                0.96,    # n_s - spectral index
+                67.0,    # H0 - Hubble parameter
+                0.022,   # omega_b - baryon density
+                0.12,    # omega_c - CDM density
+                0.06,    # M_nu - neutrino mass in eV
+                -1.0,    # w0 - dark energy equation of state
+                0.0      # wa - dark energy evolution
             ])
             D = jnp.array(0.8)  # Growth factor
 

@@ -20,12 +20,13 @@ def get_test_cosmology():
 
 def get_test_cosmology_array():
     """Get cosmology parameters as array for emulator input."""
-    # This should match the expected input format for your emulators
-    # Adjust based on actual emulator requirements
+    # Parameters: z, ln10^10 As, ns, H0, omega_b, omega_c, Mnu, w0, wa
+    # This matches the expected input format for the emulators
     return jnp.array([
+        1.0,     # z - redshift
         3.044,   # ln10As
         0.9649,  # ns
-        0.6736,  # h
+        67.36,   # H0 (h * 100)
         0.02237, # omega_b
         0.1200,  # omega_c
         0.06,    # m_nu
