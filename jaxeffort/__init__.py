@@ -16,7 +16,12 @@ from jaxeffort.jaxeffort import *
 from .data_fetcher import (
     get_emulator_path,
     get_fetcher,
-    MultipoleDataFetcher
+    MultipoleDataFetcher,
+    clear_cache,
+    check_for_updates,
+    force_update,
+    get_cache_info,
+    clear_all_cache
 )
 
 # Explicitly export stochastic term function
@@ -41,6 +46,12 @@ __all__ = [
     "get_emulator_path",
     "get_fetcher",
     "MultipoleDataFetcher",
+    # Cache management
+    "clear_cache",
+    "check_for_updates",
+    "force_update",
+    "get_cache_info",
+    "clear_all_cache",
     # Trained emulators dictionary
     "trained_emulators",
     "EMULATOR_CONFIGS",
@@ -57,7 +68,7 @@ trained_emulators = {}
 # This can be easily extended with new models in the future
 EMULATOR_CONFIGS = {
     "pybird_mnuw0wacdm": {
-        "zenodo_url": "https://zenodo.org/records/17138475/files/trained_effort_pybird_mnuw0wacdm.tar.gz?download=1",
+        "zenodo_url": "https://zenodo.org/records/17154523/files/trained_effort_pybird_mnuw0wacdm.tar.gz?download=1",
         "description": "PyBird emulator for massive neutrinos, w0wa CDM cosmology",
         "has_noise": False,  # Set to True if the emulator includes noise (st/) component
     }
@@ -265,5 +276,3 @@ def reload_emulators(model_name: str = None):
             trained_emulators[name] = _load_emulator_set(name, config, auto_download=True)
 
     return trained_emulators
-
-

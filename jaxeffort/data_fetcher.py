@@ -6,10 +6,13 @@ Based on the jaxcapse data fetcher design but adapted for jaxeffort's multipole 
 """
 
 import hashlib
+import json
 import os
 import shutil
 import tarfile
+import time
 import urllib.request
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 from urllib.error import URLError
@@ -61,6 +64,9 @@ class MultipoleDataFetcher:
 
         # Path for extracted emulators
         self.emulators_dir = self.cache_dir / "emulators" / self.emulator_name
+
+        # Path for metadata file
+        self.metadata_file = self.cache_dir / f"{self.emulator_name}_metadata.json"
 
     def _download_file(self, url: str, destination: Path,
                       show_progress: bool = True) -> bool:
@@ -154,6 +160,67 @@ class MultipoleDataFetcher:
             if show_progress:
                 print(f"Error extracting tar file: {e}")
             return False
+
+    def _load_metadata(self) -> Dict[str, Any]:
+        """
+        Load cached metadata about the downloaded files.
+
+        Returns
+        -------
+        dict
+            Metadata dictionary with download info
+        """
+        if self.metadata_file.exists():
+            try:
+                with open(self.metadata_file, 'r') as f:
+                    return json.load(f)
+            except (json.JSONDecodeError, IOError):
+                pass
+        return {}
+
+    def _save_metadata(self, metadata: Dict[str, Any]):
+        """
+        Save metadata about the downloaded files.
+
+        Parameters
+        ----------
+        metadata : dict
+            Metadata to save
+        """
+        try:
+            with open(self.metadata_file, 'w') as f:
+                json.dump(metadata, f, indent=2, default=str)
+        except IOError as e:
+            print(f"Warning: Could not save metadata: {e}")
+
+    def _get_remote_info(self, url: str) -> Dict[str, Any]:
+        """
+        Get remote file information without downloading.
+
+        Parameters
+        ----------
+        url : str
+            URL to check
+
+        Returns
+        -------
+        dict
+            Dictionary with 'size', 'last_modified', and 'etag' if available
+        """
+        info = {}
+        try:
+            request = urllib.request.Request(url, method='HEAD')
+            with urllib.request.urlopen(request) as response:
+                headers = response.headers
+                if 'Content-Length' in headers:
+                    info['size'] = int(headers['Content-Length'])
+                if 'Last-Modified' in headers:
+                    info['last_modified'] = headers['Last-Modified']
+                if 'ETag' in headers:
+                    info['etag'] = headers['ETag'].strip('"')
+        except (URLError, IOError):
+            pass
+        return info
 
     def _verify_checksum(self, filepath: Path, expected_checksum: str) -> bool:
         """
@@ -357,6 +424,21 @@ class MultipoleDataFetcher:
 
                 if show_progress:
                     print(f"✓ All multipole emulator data ready at: {self.emulators_dir}")
+
+                # Save metadata about this download
+                metadata = {
+                    'downloaded_at': datetime.now().isoformat(),
+                    'zenodo_url': self.zenodo_url,
+                    'emulator_name': self.emulator_name,
+                    'tar_file_size': self.tar_path.stat().st_size if self.tar_path.exists() else None,
+                    'checksum_verified': self.expected_checksum is not None
+                }
+                # Get remote info if possible
+                remote_info = self._get_remote_info(self.zenodo_url)
+                if remote_info:
+                    metadata['remote_info'] = remote_info
+                self._save_metadata(metadata)
+
                 return True
             else:
                 if show_progress:
@@ -425,17 +507,166 @@ class MultipoleDataFetcher:
             return multipole_paths
         return None
 
-    def clear_cache(self):
+    def clear_cache(self, clear_tar: bool = True, show_progress: bool = True):
         """
         Clear cached emulator files.
+
+        Parameters
+        ----------
+        clear_tar : bool
+            Whether to also clear the downloaded tar file
+        show_progress : bool
+            Whether to show progress messages
         """
+        items_cleared = []
+
         # Clear extracted files
         if self.emulators_dir.exists():
             shutil.rmtree(self.emulators_dir)
-        # Clear tar file
-        if self.tar_path.exists():
+            items_cleared.append("extracted emulators")
+
+        # Clear tar file if requested
+        if clear_tar and self.tar_path.exists():
             self.tar_path.unlink()
-        print("Cleared cached multipole emulator files")
+            items_cleared.append("tar archive")
+
+        # Clear metadata
+        if self.metadata_file.exists():
+            self.metadata_file.unlink()
+            items_cleared.append("metadata")
+
+        if show_progress:
+            if items_cleared:
+                print(f"Cleared cached files: {', '.join(items_cleared)}")
+            else:
+                print("No cached files to clear")
+
+    def check_for_updates(self, show_progress: bool = True) -> bool:
+        """
+        Check if updates are available for the cached emulators.
+
+        Parameters
+        ----------
+        show_progress : bool
+            Whether to show progress messages
+
+        Returns
+        -------
+        bool
+            True if updates are available, False otherwise
+        """
+        # Load cached metadata
+        metadata = self._load_metadata()
+        if not metadata:
+            if show_progress:
+                print("No cached metadata found")
+            return True  # Assume update needed if no metadata
+
+        # Get current remote info
+        if show_progress:
+            print("Checking for updates...")
+        remote_info = self._get_remote_info(self.zenodo_url)
+
+        if not remote_info:
+            if show_progress:
+                print("Could not check remote version")
+            return False
+
+        # Compare with cached info
+        cached_remote = metadata.get('remote_info', {})
+        update_available = False
+
+        # Check ETag if available (most reliable)
+        if 'etag' in remote_info and 'etag' in cached_remote:
+            if remote_info['etag'] != cached_remote['etag']:
+                update_available = True
+                if show_progress:
+                    print("✓ Update available: ETag changed")
+        # Check file size
+        elif 'size' in remote_info and 'size' in cached_remote:
+            if remote_info['size'] != cached_remote['size']:
+                update_available = True
+                if show_progress:
+                    print("✓ Update available: File size changed")
+        # Check last modified
+        elif 'last_modified' in remote_info and 'last_modified' in cached_remote:
+            if remote_info['last_modified'] != cached_remote['last_modified']:
+                update_available = True
+                if show_progress:
+                    print("✓ Update available: Last modified date changed")
+        else:
+            # Can't determine, assume no update
+            if show_progress:
+                print("Could not determine if updates are available")
+
+        if not update_available and show_progress:
+            print("✓ Cached version is up to date")
+
+        return update_available
+
+    def force_update(self, show_progress: bool = True) -> bool:
+        """
+        Force update by clearing cache and re-downloading.
+
+        Parameters
+        ----------
+        show_progress : bool
+            Whether to show progress messages
+
+        Returns
+        -------
+        bool
+            True if successful, False otherwise
+        """
+        if show_progress:
+            print("Force updating multipole emulator data...")
+
+        # Clear entire cache directory and recreate it
+        if self.cache_dir.exists():
+            shutil.rmtree(self.cache_dir)
+            if show_progress:
+                print(f"Cleared cache directory: {self.cache_dir}")
+
+        # Recreate the cache directory
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        if show_progress:
+            print(f"Recreated cache directory: {self.cache_dir}")
+
+        # Re-download and extract
+        if show_progress:
+            print("Re-downloading latest version...")
+        return self.download_and_extract(force=True, show_progress=show_progress)
+
+    def get_cache_info(self) -> Dict[str, Any]:
+        """
+        Get information about cached files.
+
+        Returns
+        -------
+        dict
+            Dictionary with cache information
+        """
+        info = {
+            'cache_dir': str(self.cache_dir),
+            'emulator_name': self.emulator_name,
+            'has_cached_data': self.emulators_dir.exists()
+        }
+
+        # Add size information
+        if self.emulators_dir.exists():
+            total_size = sum(f.stat().st_size for f in self.emulators_dir.rglob('*') if f.is_file())
+            info['extracted_size_mb'] = round(total_size / (1024 * 1024), 2)
+
+        if self.tar_path.exists():
+            info['tar_size_mb'] = round(self.tar_path.stat().st_size / (1024 * 1024), 2)
+
+        # Add metadata info
+        metadata = self._load_metadata()
+        if metadata:
+            info['downloaded_at'] = metadata.get('downloaded_at')
+            info['checksum_verified'] = metadata.get('checksum_verified', False)
+
+        return info
 
 
 # Convenience functions for direct access
@@ -471,7 +702,7 @@ def get_fetcher(zenodo_url: str = None,
 
     # Use defaults for get_fetcher to maintain backward compatibility
     if zenodo_url is None:
-        zenodo_url = "https://zenodo.org/records/17138475/files/trained_effort_pybird_mnuw0wacdm.tar.gz?download=1"
+        zenodo_url = "https://zenodo.org/records/17154523/files/trained_effort_pybird_mnuw0wacdm.tar.gz?download=1"
     if emulator_name is None:
         emulator_name = "pybird_mnuw0wacdm"
 
@@ -502,3 +733,170 @@ def get_multipole_paths() -> Optional[Dict[int, Path]]:
         Dictionary mapping multipole l values (0, 2, 4) to their paths
     """
     return get_fetcher().get_multipole_paths()
+
+
+def clear_cache(model_name: str = None, clear_tar: bool = True, show_progress: bool = True):
+    """
+    Clear cached emulator files for a specific model or all models.
+
+    Parameters
+    ----------
+    model_name : str, optional
+        Specific model to clear cache for. If None, clears default model.
+    clear_tar : bool
+        Whether to also clear downloaded tar files
+    show_progress : bool
+        Whether to show progress messages
+
+    Examples
+    --------
+    >>> import jaxeffort
+    >>> # Clear cache for default model
+    >>> jaxeffort.clear_cache()
+    >>> # Clear cache but keep tar file
+    >>> jaxeffort.clear_cache(clear_tar=False)
+    """
+    if model_name:
+        # Clear specific model
+        zenodo_url = f"https://zenodo.org/records/17138475/files/trained_effort_{model_name}.tar.gz?download=1"
+        fetcher = MultipoleDataFetcher(zenodo_url, model_name)
+    else:
+        fetcher = get_fetcher()
+
+    fetcher.clear_cache(clear_tar=clear_tar, show_progress=show_progress)
+
+
+def check_for_updates(model_name: str = None, show_progress: bool = True) -> bool:
+    """
+    Check if updates are available for cached emulators.
+
+    Parameters
+    ----------
+    model_name : str, optional
+        Specific model to check. If None, checks default model.
+    show_progress : bool
+        Whether to show progress messages
+
+    Returns
+    -------
+    bool
+        True if updates are available, False otherwise
+
+    Examples
+    --------
+    >>> import jaxeffort
+    >>> if jaxeffort.check_for_updates():
+    ...     print("Updates available!")
+    ...     jaxeffort.force_update()
+    """
+    if model_name:
+        zenodo_url = f"https://zenodo.org/records/17138475/files/trained_effort_{model_name}.tar.gz?download=1"
+        fetcher = MultipoleDataFetcher(zenodo_url, model_name)
+    else:
+        fetcher = get_fetcher()
+
+    return fetcher.check_for_updates(show_progress=show_progress)
+
+
+def force_update(model_name: str = None, show_progress: bool = True) -> bool:
+    """
+    Force update emulators by clearing cache and re-downloading.
+
+    This function will:
+    1. Clear the entire cache directory (~/.jaxeffort_data)
+    2. Recreate the cache directory
+    3. Download the latest version from Zenodo
+    4. Extract and set up the emulators
+
+    Parameters
+    ----------
+    model_name : str, optional
+        Specific model to update. If None, updates default model.
+        Note: This will still clear the entire cache directory.
+    show_progress : bool
+        Whether to show progress messages
+
+    Returns
+    -------
+    bool
+        True if successful, False otherwise
+
+    Examples
+    --------
+    >>> import jaxeffort
+    >>> # Force update to get latest version (clears entire cache)
+    >>> jaxeffort.force_update()
+    >>> # Update specific model (still clears entire cache)
+    >>> jaxeffort.force_update("pybird_mnuw0wacdm")
+    """
+    if model_name:
+        zenodo_url = f"https://zenodo.org/records/17138475/files/trained_effort_{model_name}.tar.gz?download=1"
+        fetcher = MultipoleDataFetcher(zenodo_url, model_name)
+    else:
+        fetcher = get_fetcher()
+
+    return fetcher.force_update(show_progress=show_progress)
+
+
+def get_cache_info(model_name: str = None) -> Dict[str, Any]:
+    """
+    Get information about cached emulator files.
+
+    Parameters
+    ----------
+    model_name : str, optional
+        Specific model to get info for. If None, gets info for default model.
+
+    Returns
+    -------
+    dict
+        Dictionary with cache information including:
+        - cache_dir: Path to cache directory
+        - emulator_name: Name of the emulator
+        - has_cached_data: Whether data is cached
+        - extracted_size_mb: Size of extracted files in MB
+        - tar_size_mb: Size of tar file in MB
+        - downloaded_at: When the data was downloaded
+        - checksum_verified: Whether checksum was verified
+
+    Examples
+    --------
+    >>> import jaxeffort
+    >>> info = jaxeffort.get_cache_info()
+    >>> print(f"Cache location: {info['cache_dir']}")
+    >>> print(f"Downloaded at: {info['downloaded_at']}")
+    """
+    if model_name:
+        zenodo_url = f"https://zenodo.org/records/17138475/files/trained_effort_{model_name}.tar.gz?download=1"
+        fetcher = MultipoleDataFetcher(zenodo_url, model_name)
+    else:
+        fetcher = get_fetcher()
+
+    return fetcher.get_cache_info()
+
+
+def clear_all_cache(show_progress: bool = True):
+    """
+    Clear ALL cached jaxeffort data.
+
+    This will remove the entire ~/.jaxeffort_data directory.
+
+    Parameters
+    ----------
+    show_progress : bool
+        Whether to show progress messages
+
+    Examples
+    --------
+    >>> import jaxeffort
+    >>> # Remove all cached data
+    >>> jaxeffort.clear_all_cache()
+    """
+    cache_dir = Path.home() / ".jaxeffort_data"
+    if cache_dir.exists():
+        shutil.rmtree(cache_dir)
+        if show_progress:
+            print(f"Cleared all cached data from {cache_dir}")
+    else:
+        if show_progress:
+            print("No cached data to clear")
