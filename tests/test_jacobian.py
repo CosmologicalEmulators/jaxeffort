@@ -296,7 +296,7 @@ class TestJacobianEdgeCases:
     def test_jacobian_second_order(self, multipole_emulator):
         """Test second-order derivatives (Hessian) are finite."""
         biases = jnp.array([1.5, 0.5, -0.2, 0.1])
-        cosmology = jnp.array([0.025, 0.120, 0.06, -1.0, 0.0, 3.05, 0.96, 0.67])
+        cosmology = jnp.array([1.0, 3.05, 0.96, 67.0, 0.022, 0.12, 0.06, -1.0, 0.0])
         D = 1.0
 
         # Define scalar function for simpler Hessian
@@ -307,7 +307,7 @@ class TestJacobianEdgeCases:
         # Compute Hessian using composition of jacfwd
         hessian = jacfwd(jacfwd(f_scalar))(biases)
 
-        # Check shape
+        # Check shape - Hessian of scalar function w.r.t. 4 bias parameters
         assert hessian.shape == (4, 4), f"Expected Hessian shape (4, 4), got {hessian.shape}"
 
         # Check that all values are finite
