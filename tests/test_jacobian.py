@@ -324,35 +324,42 @@ class TestJacobianWithRealEmulator:
         """Test with real emulator from Zenodo if it has been downloaded."""
         try:
             import jaxeffort
-            emulator = jaxeffort.get_default_emulator()
+
+            # Check if any emulators are loaded
+            if not jaxeffort.trained_emulators:
+                pytest.skip("No emulators available")
+
+            # Get the first available emulator (pybird_mnuw0wacdm)
+            model_name = list(jaxeffort.trained_emulators.keys())[0]
+            emulators = jaxeffort.trained_emulators[model_name]
+
+            # Try to get monopole (l=0) emulator
+            emulator = emulators.get('0')
 
             if emulator is None:
                 pytest.skip("Real emulator not available (not downloaded)")
 
             # Define realistic test inputs
-            # Real PyBird emulator expects 8 bias parameters: [b1, b2, b3, b4, b5, b6, b7, f]
+            # The real emulator expects 4 bias parameters: [b1, b2, bs2, b3nl]
             biases = jnp.array([
-                1.5,    # b1 - linear bias
+                2.0,    # b1 - linear bias
                 0.5,    # b2 - second-order bias
-                -0.2,   # b3 - third-order bias
-                0.1,    # b4 - fourth-order bias
-                0.0,    # b5 - fifth-order bias
-                0.0,    # b6 - sixth-order bias
-                0.0,    # b7 - seventh-order bias
-                0.8     # f - growth rate parameter
+                -0.4,   # bs2 - shear bias
+                0.1     # b3nl - third-order non-local bias
             ])
+
+            # Cosmology parameters: Om, Ob, h, ns, s8, mnu, w0, wa
             cosmology = jnp.array([
-                0.5,     # z (redshift) - note: real emulator might expect z first
-                3.05,    # ln(10^10 A_s)
-                0.96,    # n_s
-                0.67,    # H0/100
-                0.025,   # omega_b = Omega_b * h^2
-                0.120,   # omega_c = Omega_cdm * h^2
-                0.06,    # M_nu
-                -1.0,    # w_0
-                0.0      # w_a
+                0.3,     # Omega_m (matter density)
+                0.05,    # Omega_b (baryon density)
+                0.7,     # h (Hubble parameter)
+                0.96,    # n_s (spectral index)
+                0.8,     # sigma_8
+                0.06,    # M_nu (neutrino mass)
+                -1.0,    # w0 (dark energy equation of state)
+                0.0      # wa (dark energy evolution)
             ])
-            D = 1.0
+            D = jnp.array(0.8)  # Growth factor
 
             def f(cosmo):
                 Pl = emulator.get_Pl(cosmo, biases, D)
