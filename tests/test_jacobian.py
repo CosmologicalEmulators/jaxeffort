@@ -342,12 +342,16 @@ class TestJacobianWithRealEmulator:
                 pytest.skip("Real emulator not available (not downloaded)")
 
             # Define realistic test inputs
-            # The real emulator expects 4 bias parameters: [b1, b2, bs2, b3nl]
+            # The real emulator expects 8 bias parameters: [b1, b2, b3, b4, b5, b6, b7, f]
             biases = jnp.array([
                 2.0,    # b1 - linear bias
                 0.5,    # b2 - second-order bias
-                -0.4,   # bs2 - shear bias
-                0.1     # b3nl - third-order non-local bias
+                -0.4,   # b3 - third-order bias
+                0.1,    # b4 - fourth-order bias
+                0.05,   # b5
+                0.02,   # b6
+                0.01,   # b7
+                0.8     # f - growth rate
             ])
 
             # Cosmology parameters: z, ln10^10 As, ns, H0, omega_b, omega_c, Mnu, w0, wa
