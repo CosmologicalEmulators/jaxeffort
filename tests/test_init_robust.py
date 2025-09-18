@@ -341,22 +341,14 @@ class TestConfigurationManagement:
 
 
 class TestImportFallbacks:
-    """Test import fallback mechanisms for different jaxace versions."""
+    """Test import mechanisms for jaxace."""
 
-    def test_import_with_omega_ma(self):
-        """Test import when jaxace exports Ωma."""
-        # This is tricky to test without actually having different versions
-        # We'll test that the aliases are set up correctly
+    def test_import_omega_m_a(self):
+        """Test that Ωm_a is imported from jaxace."""
         import jaxeffort.jaxeffort as jef
 
-        # Check that both aliases exist
-        assert hasattr(jef, 'Ωma') or hasattr(jef, 'Ωm_a')
-
-        # If one exists, the other should be aliased to it
-        if hasattr(jef, 'Ωma'):
-            assert jef.Ωm_a is jef.Ωma or jef.Ωm_a == jef.Ωma
-        elif hasattr(jef, 'Ωm_a'):
-            assert jef.Ωma is jef.Ωm_a or jef.Ωma == jef.Ωm_a
+        # Check that Ωm_a exists (the standard import)
+        assert hasattr(jef, 'Ωm_a')
 
 
 class TestInitializationIntegrity:

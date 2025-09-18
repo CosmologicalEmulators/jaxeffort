@@ -700,7 +700,7 @@ def get_fetcher(zenodo_url: str = None,
     """
     global _default_fetcher
 
-    # Use defaults for get_fetcher to maintain backward compatibility
+    # Use defaults if not specified
     if zenodo_url is None:
         zenodo_url = "https://zenodo.org/records/17154523/files/trained_effort_pybird_mnuw0wacdm.tar.gz?download=1"
     if emulator_name is None:

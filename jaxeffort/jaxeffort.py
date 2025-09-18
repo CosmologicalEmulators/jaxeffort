@@ -10,33 +10,17 @@ from functools import partial
 
 # Import all background cosmology functions from jaxace
 # Handle different jaxace versions that may export Ωma or Ωm_a
-try:
-    from jaxace.background import (
-        W0WaCDMCosmology,
-        a_z, E_a, E_z, dlogEdloga, Ωma,
-        D_z, f_z, D_f_z,
-        r_z, dA_z, dL_z,
-        ρc_z, Ωtot_z,
-        # Neutrino functions
-        F, dFdy, ΩνE2,
-        # Growth solver
-        growth_solver, growth_ode_system
-    )
-    Ωm_a = Ωma  # Create alias for compatibility
-except ImportError:
-    # Try alternative import for different jaxace versions
-    from jaxace.background import (
-        W0WaCDMCosmology,
-        a_z, E_a, E_z, dlogEdloga, Ωm_a,
-        D_z, f_z, D_f_z,
-        r_z, dA_z, dL_z,
-        ρc_z, Ωtot_z,
-        # Neutrino functions
-        F, dFdy, ΩνE2,
-        # Growth solver
-        growth_solver, growth_ode_system
-    )
-    Ωma = Ωm_a  # Create reverse alias
+from jaxace.background import (
+    W0WaCDMCosmology,
+    a_z, E_a, E_z, dlogEdloga, Ωm_a,
+    D_z, f_z, D_f_z,
+    r_z, dA_z, dL_z,
+    ρc_z, Ωtot_z,
+    # Neutrino functions
+    F, dFdy, ΩνE2,
+    # Growth solver
+    growth_solver, growth_ode_system
+)
 
 # Import neural network infrastructure from jaxace
 from jaxace import (
@@ -84,26 +68,6 @@ class MLP:
         self.postprocessing = postprocessing
         self.emulator_description = emulator_description
 
-        # Store emulator features for compatibility - extract from nn_dict
-        self.features = self._extract_features(nn_dict)
-        self.activations = self._extract_activations(nn_dict)
-        self.NN_params = emulator.parameters
-
-    def _extract_features(self, nn_dict):
-        """Extract layer sizes from nn_dict for compatibility."""
-        features = []
-        for i in range(nn_dict['n_hidden_layers']):
-            features.append(nn_dict['layers'][f'layer_{i+1}']['n_neurons'])
-        features.append(nn_dict['n_output_features'])
-        return features
-
-    def _extract_activations(self, nn_dict):
-        """Extract activation functions from nn_dict for compatibility."""
-        activations = []
-        for i in range(nn_dict['n_hidden_layers']):
-            activations.append(nn_dict['layers'][f'layer_{i+1}']['activation_function'])
-        return activations
-
     def maximin(self, input):
         """Normalize input using jaxace's maximin function."""
         return maximin(input, self.in_MinMax)
@@ -111,10 +75,6 @@ class MLP:
     def inv_maximin(self, output):
         """Denormalize output using jaxace's inv_maximin function."""
         return inv_maximin(output, self.out_MinMax)
-
-    def apply(self, params, x):
-        """Apply the neural network (for backward compatibility)."""
-        return self.emulator.run_emulator(x)
 
     def get_component(self, input, D):
         """
@@ -294,21 +254,20 @@ def load_bias_contraction(root_path, filename="biascontraction", required=True):
 
 def load_component_emulator(folder_path):
     """Load a component emulator (P11, Ploop, Pct, or Noise) using jaxace infrastructure."""
-    # Ensure folder path ends with separator
-    if not folder_path.endswith('/'):
-        folder_path += '/'
+    from pathlib import Path
+    folder_path = Path(folder_path)
 
     # Load normalization parameters
-    in_MinMax = jnp.load(folder_path + "inminmax.npy")
-    out_MinMax = jnp.load(folder_path + "outminmax.npy")
+    in_MinMax = jnp.load(folder_path / "inminmax.npy")
+    out_MinMax = jnp.load(folder_path / "outminmax.npy")
 
     # Load neural network configuration
-    with open(folder_path + '/nn_setup.json', 'r') as f:
+    with open(folder_path / "nn_setup.json", 'r') as f:
         nn_dict = json.load(f)
 
     # Load k-grid and weights
-    k_grid = jnp.load(folder_path + "k.npy")
-    weights = jnp.load(folder_path + "weights.npy")
+    k_grid = jnp.load(folder_path / "k.npy")
+    weights = jnp.load(folder_path / "weights.npy")
 
     # Initialize jaxace emulator
     jaxace_emulator = init_emulator(
@@ -318,7 +277,7 @@ def load_component_emulator(folder_path):
     )
 
     # Load postprocessing
-    postprocessing = load_preprocessing(folder_path, "postprocessing")
+    postprocessing = load_preprocessing(str(folder_path), "postprocessing")
 
     # Extract emulator description
     emulator_description = nn_dict.get("emulator_description", {})
@@ -346,10 +305,13 @@ def load_multipole_emulator(folder_path: str) -> MultipoleEmulators:
     Returns:
         MultipoleEmulators: An instance of the MultipoleEmulators class containing the loaded emulators.
     """
+    from pathlib import Path
+    folder_path = Path(folder_path)
+
     # Define subfolder paths
-    P11_path = f"{folder_path}/11/"
-    Ploop_path = f"{folder_path}/loop/"
-    Pct_path = f"{folder_path}/ct/"
+    P11_path = folder_path / "11"
+    Ploop_path = folder_path / "loop"
+    Pct_path = folder_path / "ct"
 
     # Load each component emulator (no bias contraction at component level)
     P11_emulator = load_component_emulator(P11_path)
@@ -357,7 +319,7 @@ def load_multipole_emulator(folder_path: str) -> MultipoleEmulators:
     Pct_emulator = load_component_emulator(Pct_path)
 
     # Load multipole-level bias contraction - this is required (matches Effort.jl PℓEmulator)
-    multipole_bias_contraction = load_bias_contraction(folder_path, required=True)
+    multipole_bias_contraction = load_bias_contraction(str(folder_path), required=True)
 
     # Return the MultipoleEmulators instance with bias contraction
     return MultipoleEmulators(P11_emulator, Ploop_emulator, Pct_emulator, multipole_bias_contraction)
@@ -399,11 +361,14 @@ def load_multipole_noise_emulator(folder_path: str) -> MultipoleNoiseEmulator:
     Returns:
         MultipoleNoiseEmulator: An instance of the MultipoleNoiseEmulator class.
     """
+    from pathlib import Path
+    folder_path = Path(folder_path)
+
     # Define subfolder paths
-    P11_path = f"{folder_path}/11/"
-    Ploop_path = f"{folder_path}/loop/"
-    Pct_path = f"{folder_path}/ct/"
-    noise_path = f"{folder_path}/st/"
+    P11_path = folder_path / "11"
+    Ploop_path = folder_path / "loop"
+    Pct_path = folder_path / "ct"
+    noise_path = folder_path / "st"
 
     # Load component emulators (no bias contraction at component level)
     P11_emulator = load_component_emulator(P11_path)
@@ -413,7 +378,7 @@ def load_multipole_noise_emulator(folder_path: str) -> MultipoleNoiseEmulator:
 
     # For MultipoleNoiseEmulator, we need a bias contraction at the top level
     # This handles all components including noise
-    overall_bias_contraction = load_bias_contraction(folder_path, required=True)
+    overall_bias_contraction = load_bias_contraction(str(folder_path), required=True)
 
     # Create multipole emulator with a placeholder bias contraction
     # (The actual contraction happens at the MultipoleNoiseEmulator level)

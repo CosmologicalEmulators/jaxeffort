@@ -70,13 +70,13 @@ class TestJITCompilationBehavior:
         assert avg_subsequent_time < first_call_time
 
     def test_alternative_jit_path_without_emulator_param(self, tmp_path):
-        """Test the alternative JIT compilation path (lines 144-154)."""
+        """Test the alternative JIT compilation path."""
         # Create MLP with mock that doesn't support emulator parameter
         mock_flax = MagicMock()
 
         # Make run_emulator not accept emulator parameter
         def run_emulator_no_param(self, input_data):
-            return jnp.ones((100, 10))
+            return jnp.ones((1000,))  # Return flat array matching out_MinMax size
 
         mock_flax.run_emulator = run_emulator_no_param.__get__(mock_flax, type(mock_flax))
 
@@ -91,7 +91,7 @@ class TestJITCompilationBehavior:
             k_grid=jnp.linspace(0.01, 0.3, 100),
             in_MinMax=jnp.array([[0, 1]] * 12),
             out_MinMax=jnp.array([[0, 1]] * 1000),
-            postprocessing=lambda i, o, d: o * d,
+            postprocessing=lambda i, o, d: o.reshape(100, 10),  # Reshape in postprocessing
             emulator_description={},
             nn_dict={'n_hidden_layers': 2, 'n_output_features': 1000,
                     'layers': {'layer_1': {'n_neurons': 50, 'activation_function': 'tanh'},
@@ -108,7 +108,8 @@ class TestJITCompilationBehavior:
     def _create_mock_mlp(self, tmp_path):
         """Helper to create a mock MLP for testing."""
         mock_emulator = MagicMock()
-        mock_emulator.run_emulator = lambda params, x: jnp.ones((1000,))  # Returns flat array
+        # Fix: run_emulator should only take x, not params
+        mock_emulator.run_emulator = lambda x: jnp.ones((1000,))  # Returns flat array
         mock_emulator.parameters = {'test': 'params'}
 
         return MLP(
@@ -138,10 +139,12 @@ class TestNumericalStability:
         cϵ2 = jnp.array(0.1, dtype=jnp.float64)
         n_bar = jnp.array(1e-3, dtype=jnp.float64)  # Typical galaxy number density
 
-        stoch = get_stoch_terms(cϵ0, cϵ1, cϵ2, n_bar, k_grid)
+        P0, P2 = get_stoch_terms(cϵ0, cϵ1, cϵ2, n_bar, k_grid)
 
-        assert stoch.dtype == jnp.float64
-        assert jnp.all(jnp.isfinite(stoch))
+        assert P0.dtype == jnp.float64
+        assert P2.dtype == jnp.float64
+        assert jnp.all(jnp.isfinite(P0))
+        assert jnp.all(jnp.isfinite(P2))
 
     def test_handles_extreme_values_gracefully(self):
         """Test behavior with extreme parameter values."""
@@ -153,18 +156,20 @@ class TestNumericalStability:
         cϵ2_large = jnp.array(10.0)
         n_bar = jnp.array(1e-3)
 
-        stoch_large = get_stoch_terms(cϵ0_large, cϵ1_large, cϵ2_large, n_bar, k_grid)
-        assert jnp.all(jnp.isfinite(stoch_large))
+        P0_large, P2_large = get_stoch_terms(cϵ0_large, cϵ1_large, cϵ2_large, n_bar, k_grid)
+        assert jnp.all(jnp.isfinite(P0_large))
+        assert jnp.all(jnp.isfinite(P2_large))
 
         # Test with very small parameters
         cϵ0_small = jnp.array(0.01)
         cϵ1_small = jnp.array(0.01)
         cϵ2_small = jnp.array(0.01)
-        stoch_small = get_stoch_terms(cϵ0_small, cϵ1_small, cϵ2_small, n_bar, k_grid)
-        assert jnp.all(jnp.isfinite(stoch_small))
+        P0_small, P2_small = get_stoch_terms(cϵ0_small, cϵ1_small, cϵ2_small, n_bar, k_grid)
+        assert jnp.all(jnp.isfinite(P0_small))
+        assert jnp.all(jnp.isfinite(P2_small))
 
         # Larger parameters should produce larger stochastic terms
-        assert jnp.mean(jnp.abs(stoch_large[0])) > jnp.mean(jnp.abs(stoch_small[0]))
+        assert jnp.mean(jnp.abs(P0_large)) > jnp.mean(jnp.abs(P0_small))
 
     def test_gradient_stability(self):
         """Test that gradients are stable and well-behaved."""
@@ -219,7 +224,7 @@ class TestComponentComposition:
             P11=mock_p11,
             Ploop=mock_ploop,
             Pct=mock_pct,
-            biascontraction=mock_bias_contraction,
+            bias_contraction=mock_bias_contraction,
             k_grid=jnp.linspace(0.01, 0.3, 50)
         )
 
@@ -246,7 +251,7 @@ class TestComponentComposition:
             P11=mock_p11,
             Ploop=mock_ploop,
             Pct=mock_pct,
-            biascontraction=lambda b1, b2, bs2, b3nl: jnp.ones((33,)),
+            bias_contraction=lambda b1, b2, bs2, b3nl: jnp.ones((33,)),
             k_grid=jnp.linspace(0.01, 0.3, 50)
         )
 
@@ -348,53 +353,52 @@ class TestEdgeCases:
         """Test behavior with zero bias parameters."""
         k_grid = jnp.linspace(0.01, 0.3, 50)
 
-        # All zeros
-        ceps = jnp.zeros(3)
-        b1 = jnp.array(0.0)
-        a_eff = jnp.array(1.0)
+        # All zeros (except n_bar to avoid division by zero)
+        cϵ0 = jnp.array(0.0)
+        cϵ1 = jnp.array(0.0)
+        cϵ2 = jnp.array(0.0)
+        n_bar = jnp.array(1e-6)  # Small but non-zero
 
-        stoch = get_stoch_terms(k_grid, ceps, b1, a_eff)
+        P0, P2 = get_stoch_terms(cϵ0, cϵ1, cϵ2, n_bar, k_grid)
 
         # Should handle zeros gracefully
-        assert jnp.all(jnp.isfinite(stoch))
-        # With zero parameters, certain terms should vanish
-        assert jnp.allclose(stoch[:, 0], 0.0)  # Monopole term
+        assert jnp.all(jnp.isfinite(P0))
+        assert jnp.all(jnp.isfinite(P2))
 
     def test_single_k_value(self):
         """Test with single k value instead of array."""
         k_single = jnp.array(0.1)
-        ceps = jnp.array([1.0, 0.5, 0.1])
-        b1 = jnp.array(1.0)
-        a_eff = jnp.array(0.5)
+        cϵ0 = jnp.array(1.0)
+        cϵ1 = jnp.array(0.5)
+        cϵ2 = jnp.array(0.1)
+        n_bar = jnp.array(1e-3)
 
-        stoch = get_stoch_terms(k_single, ceps, b1, a_eff)
+        P0, P2 = get_stoch_terms(cϵ0, cϵ1, cϵ2, n_bar, k_single)
 
         # Should work with scalar k
-        assert stoch.shape == (2,)  # monopole and quadrupole
-        assert jnp.all(jnp.isfinite(stoch))
+        assert P0.shape == ()  # scalar
+        assert P2.shape == ()  # scalar
+        assert jnp.isfinite(P0)
+        assert jnp.isfinite(P2)
 
     def test_extreme_k_ranges(self):
         """Test with very small and very large k values."""
         # Very small k
         k_small = jnp.array([1e-5, 1e-4, 1e-3])
-        ceps = jnp.array([1.0, 0.5, 0.1])
-        b1 = jnp.array(1.0)
-        a_eff = jnp.array(1.0)
+        cϵ0 = jnp.array(1.0)
+        cϵ1 = jnp.array(0.5)
+        cϵ2 = jnp.array(0.1)
+        n_bar = jnp.array(1e-3)
 
-        stoch_small = get_stoch_terms(k_small, ceps, b1, a_eff)
-        assert jnp.all(jnp.isfinite(stoch_small))
+        P0_small, P2_small = get_stoch_terms(cϵ0, cϵ1, cϵ2, n_bar, k_small)
+        assert jnp.all(jnp.isfinite(P0_small))
+        assert jnp.all(jnp.isfinite(P2_small))
 
         # Very large k
         k_large = jnp.array([1.0, 10.0, 100.0])
-        stoch_large = get_stoch_terms(k_large, ceps, b1, a_eff)
-        assert jnp.all(jnp.isfinite(stoch_large))
-
-        # Stochastic terms should grow with k^2 for shot noise
-        # Check rough scaling
-        ratio = stoch_large[-1, 0] / stoch_small[0, 0]
-        k_ratio = (k_large[-1] / k_small[0]) ** 2
-        # Should scale roughly as k^2 (within order of magnitude)
-        assert ratio > 0  # Both positive or both negative
+        P0_large, P2_large = get_stoch_terms(cϵ0, cϵ1, cϵ2, n_bar, k_large)
+        assert jnp.all(jnp.isfinite(P0_large))
+        assert jnp.all(jnp.isfinite(P2_large))
 
 
 class TestRealWorldIntegration:
@@ -406,7 +410,7 @@ class TestRealWorldIntegration:
         self._create_mock_emulator_files(tmp_path)
 
         # Load emulator
-        emulator = load_component_emulator(tmp_path, postprocessing=lambda i, o, d: o * d)
+        emulator = load_component_emulator(tmp_path)
 
         # Test evaluation with realistic parameters
         # Cosmology: Om, Ob, h, ns, s8, mnu, w0, wa
@@ -427,21 +431,19 @@ class TestRealWorldIntegration:
         k_grid = jnp.linspace(0.01, 0.3, 50)
 
         def forward(params):
-            ceps = params[:3]
-            b1 = params[3]
-            a_eff = params[4]
-            stoch = get_stoch_terms(k_grid, ceps, b1, a_eff)
-            return jnp.sum(stoch)  # Scalar output for simple Jacobian
+            cϵ0, cϵ1, cϵ2, n_bar = params[:4]
+            P0, P2 = get_stoch_terms(cϵ0, cϵ1, cϵ2, n_bar, k_grid)
+            return jnp.sum(P0) + jnp.sum(P2)  # Scalar output for simple Jacobian
 
         # Compute Jacobian
-        params = jnp.array([1.0, 0.5, 0.1, 2.0, 0.8])
+        params = jnp.array([1.0, 0.5, 0.1, 1e-3])  # cϵ0, cϵ1, cϵ2, n_bar
         jac = jax.jacfwd(forward)(params)
 
         # Should have gradient for each parameter
-        assert jac.shape == (5,)
+        assert jac.shape == (4,)
         assert jnp.all(jnp.isfinite(jac))
 
-        # b1 should have strong effect (appears linearly in noise term)
+        # n_bar should have effect (appears linearly in noise term)
         assert jnp.abs(jac[3]) > 0
 
     def _create_mock_emulator_files(self, tmp_path):

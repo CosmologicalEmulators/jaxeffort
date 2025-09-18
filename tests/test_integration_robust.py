@@ -364,26 +364,28 @@ class TestErrorPropagation:
         assert updated_loss < initial_loss
 
 
-class TestBackwardCompatibility:
-    """Test that changes maintain backward compatibility."""
+class TestFunctionSignatures:
+    """Test function signatures."""
 
-    def test_legacy_function_signatures(self):
-        """Verify legacy function signatures still work."""
+    def test_stoch_terms_signature(self):
+        """Verify get_stoch_terms signature."""
         import jaxeffort
 
-        # Test old-style calls
+        # Test correct signature
         k_grid = jnp.linspace(0.01, 0.3, 50)
 
-        # Original get_stoch_terms signature
-        ceps = jnp.array([1.0, 0.5, 0.1])
-        b1 = 2.0  # Could be float
-        a_eff = 0.8
+        # Correct signature: get_stoch_terms(cε0, cε1, cε2, n_bar, k_grid)
+        cε0 = jnp.array(1.0)
+        cε1 = jnp.array(0.5)
+        cε2 = jnp.array(0.1)
+        n_bar = jnp.array(1e-3)
 
-        # Should handle float or array inputs
-        result1 = jaxeffort.get_stoch_terms(k_grid, ceps, b1, a_eff)
-        result2 = jaxeffort.get_stoch_terms(k_grid, ceps, jnp.array(b1), jnp.array(a_eff))
+        result1 = jaxeffort.get_stoch_terms(cε0, cε1, cε2, n_bar, k_grid)
+        result2 = jaxeffort.get_stoch_terms(jnp.array(cε0), jnp.array(cε1), jnp.array(cε2), jnp.array(n_bar), k_grid)
 
-        assert jnp.allclose(result1, result2)
+        # Results are tuples (P0, P2)
+        assert jnp.allclose(result1[0], result2[0])  # Compare P0
+        assert jnp.allclose(result1[1], result2[1])  # Compare P2
 
     def test_module_exports_stability(self):
         """Verify exported functions remain available."""
@@ -417,14 +419,15 @@ class TestProductionReadiness:
         import jaxeffort
 
         k_grid = jnp.linspace(0.01, 0.3, 50)
-        ceps = jnp.array([1.0, 0.5, 0.1])
-        b1 = jnp.array(2.0)
-        a_eff = jnp.array(0.8)
+        cε0 = jnp.array(1.0)
+        cε1 = jnp.array(0.5)
+        cε2 = jnp.array(0.1)
+        n_bar = jnp.array(1e-3)
 
         # Multiple evaluations
         results = []
         for _ in range(5):
-            result = jaxeffort.get_stoch_terms(k_grid, ceps, b1, a_eff)
+            result = jaxeffort.get_stoch_terms(cε0, cε1, cε2, n_bar, k_grid)
             results.append(result)
 
         # All should be identical
