@@ -135,8 +135,10 @@ class TestRemoteInfoRetrieval:
             emulator_name="test_model"
         )
 
-        # Mock response
+        # Mock response - need to use context manager protocol
         mock_response = MagicMock()
+        mock_response.__enter__ = MagicMock(return_value=mock_response)
+        mock_response.__exit__ = MagicMock(return_value=False)
         mock_response.headers = {
             'Content-Length': '1234567',
             'Last-Modified': 'Mon, 01 Jan 2024 00:00:00 GMT',
@@ -148,7 +150,7 @@ class TestRemoteInfoRetrieval:
 
         assert info['size'] == 1234567
         assert info['last_modified'] == 'Mon, 01 Jan 2024 00:00:00 GMT'
-        assert info['etag'] == 'test-etag-123'
+        assert info['etag'] == 'test-etag-123'  # ETag quotes are stripped by implementation
 
     def test_get_remote_info_network_error(self):
         """Test handling of network errors when getting remote info."""
@@ -170,8 +172,10 @@ class TestRemoteInfoRetrieval:
             emulator_name="test_model"
         )
 
-        # Mock response with only some headers
+        # Mock response with only some headers - need context manager protocol
         mock_response = MagicMock()
+        mock_response.__enter__ = MagicMock(return_value=mock_response)
+        mock_response.__exit__ = MagicMock(return_value=False)
         mock_response.headers = {
             'Content-Length': '1234567',
             # Missing Last-Modified and ETag
