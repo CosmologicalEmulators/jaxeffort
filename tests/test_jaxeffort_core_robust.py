@@ -108,7 +108,7 @@ class TestJITCompilationBehavior:
     def _create_mock_mlp(self, tmp_path):
         """Helper to create a mock MLP for testing."""
         mock_emulator = MagicMock()
-        mock_emulator.run_emulator = lambda e, x: jnp.ones((100, 10))
+        mock_emulator.run_emulator = lambda params, x: jnp.ones((1000,))  # Returns flat array
         mock_emulator.parameters = {'test': 'params'}
 
         return MLP(

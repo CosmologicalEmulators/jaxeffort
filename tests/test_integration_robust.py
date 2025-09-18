@@ -131,7 +131,9 @@ class TestEndToEndWorkflow:
 
         # Results should be consistent
         for i in range(1, len(results)):
-            assert jnp.allclose(results[0], results[i])
+            # Results are tuples (P0, P2)
+            assert jnp.allclose(results[0][0], results[i][0])  # Compare P0
+            assert jnp.allclose(results[0][1], results[i][1])  # Compare P2
 
 
 class TestPerformanceCharacteristics:
@@ -171,8 +173,8 @@ class TestPerformanceCharacteristics:
         # Second call should be faster (no compilation)
         assert second_time < first_time * 0.5  # At least 2x faster
 
-        # Results should be different (different inputs)
-        assert not jnp.allclose(result1, result2)
+        # Results should be different (different inputs) - results are tuples
+        assert not (jnp.allclose(result1[0], result2[0]) and jnp.allclose(result1[1], result2[1]))
 
     def test_vectorization_efficiency(self):
         """Test that vectorized operations are efficient."""
@@ -296,8 +298,8 @@ class TestRealCosmologyCalculations:
         # Power should evolve with redshift
         # Generally decreases as we go to higher redshift (lower a)
         for i in range(1, len(results)):
-            # Check general trend (may not be strictly monotonic)
-            assert not jnp.allclose(results[i], results[0])
+            # Check general trend (may not be strictly monotonic) - results are tuples
+            assert not (jnp.allclose(results[i][0], results[0][0]) and jnp.allclose(results[i][1], results[0][1]))
 
 
 class TestErrorPropagation:
@@ -427,7 +429,9 @@ class TestProductionReadiness:
 
         # All should be identical
         for i in range(1, len(results)):
-            assert jnp.array_equal(results[0], results[i])
+            # Results are tuples (P0, P2)
+            assert jnp.array_equal(results[0][0], results[i][0])  # P0
+            assert jnp.array_equal(results[0][1], results[i][1])  # P2
 
     def test_numerical_precision_maintained(self):
         """Verify float64 precision is maintained."""
@@ -437,21 +441,23 @@ class TestProductionReadiness:
         assert jax.config.read('jax_enable_x64') == True
 
         k_grid = jnp.linspace(0.01, 0.3, 50, dtype=jnp.float64)
-        ceps = jnp.array([1.0, 0.5, 0.1], dtype=jnp.float64)
-        b1 = jnp.array(2.0, dtype=jnp.float64)
-        a_eff = jnp.array(0.8, dtype=jnp.float64)
+        cϵ0 = jnp.array(1.0, dtype=jnp.float64)
+        cϵ1 = jnp.array(0.5, dtype=jnp.float64)
+        cϵ2 = jnp.array(0.1, dtype=jnp.float64)
+        n_bar = jnp.array(1e-3, dtype=jnp.float64)
 
-        result = jaxeffort.get_stoch_terms(k_grid, ceps, b1, a_eff)
+        P0, P2 = jaxeffort.get_stoch_terms(cϵ0, cϵ1, cϵ2, n_bar, k_grid)
 
         # Should maintain float64
-        assert result.dtype == jnp.float64
+        assert P0.dtype == jnp.float64
+        assert P2.dtype == jnp.float64
 
         # Test precision with small differences
-        ceps2 = ceps.at[0].add(1e-15)  # Tiny change
-        result2 = jaxeffort.get_stoch_terms(k_grid, ceps2, b1, a_eff)
+        cϵ0_2 = cϵ0 + 1e-15  # Tiny change
+        P0_2, P2_2 = jaxeffort.get_stoch_terms(cϵ0_2, cϵ1, cϵ2, n_bar, k_grid)
 
         # Should detect the tiny difference (float64 precision)
-        assert not jnp.array_equal(result, result2)
+        assert not jnp.array_equal(P0, P0_2)
 
     def test_error_messages_are_helpful(self, tmp_path):
         """Verify error messages guide users to solutions."""
@@ -466,6 +472,7 @@ class TestProductionReadiness:
         )
 
         # Mock network error
+        import urllib.error
         with patch('urllib.request.urlretrieve', side_effect=urllib.error.URLError("Network unreachable")):
             success = fetcher._download_file(
                 "https://nonexistent.url/file.tar.gz",
