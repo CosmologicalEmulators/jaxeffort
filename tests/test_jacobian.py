@@ -324,71 +324,75 @@ class TestJacobianWithRealEmulator:
 
     def test_real_emulator_jacobian_if_available(self):
         """Test with real emulator from Zenodo if it has been downloaded."""
-        try:
-            import jaxeffort
+        import jaxeffort
 
-            # Check if any emulators are loaded
-            if not jaxeffort.trained_emulators:
-                pytest.skip("No emulators available")
+        # Force reload if needed to ensure emulators are loaded
+        if not jaxeffort.trained_emulators or all(
+            all(v is None for v in emulators.values())
+            for emulators in jaxeffort.trained_emulators.values()
+        ):
+            # Try to reload emulators
+            jaxeffort.reload_emulators()
 
-            # Get the first available emulator (pybird_mnuw0wacdm)
-            model_name = list(jaxeffort.trained_emulators.keys())[0]
-            emulators = jaxeffort.trained_emulators[model_name]
+        # Check if any emulators are loaded
+        if not jaxeffort.trained_emulators:
+            pytest.skip("No emulators available after reload attempt")
 
-            # Try to get monopole (l=0) emulator
-            emulator = emulators.get('0')
+        # Get the first available emulator (pybird_mnuw0wacdm)
+        model_name = list(jaxeffort.trained_emulators.keys())[0]
+        emulators = jaxeffort.trained_emulators[model_name]
 
-            if emulator is None:
-                pytest.skip("Real emulator not available (not downloaded)")
+        # Try to get monopole (l=0) emulator
+        emulator = emulators.get('0')
 
-            # Define realistic test inputs
-            # The real emulator expects 8 bias parameters: [b1, b2, b3, b4, b5, b6, b7, f]
-            biases = jnp.array([
-                2.0,    # b1 - linear bias
-                0.5,    # b2 - second-order bias
-                -0.4,   # b3 - third-order bias
-                0.1,    # b4 - fourth-order bias
-                0.05,   # b5
-                0.02,   # b6
-                0.01,   # b7
-                0.8     # f - growth rate
-            ])
+        if emulator is None:
+            pytest.skip("Real emulator not available (not downloaded)")
 
-            # Cosmology parameters: z, ln10^10 As, ns, H0, omega_b, omega_c, Mnu, w0, wa
-            # As per nn_setup.json description
-            cosmology = jnp.array([
-                1.0,     # z - redshift
-                3.05,    # ln10^10 As - amplitude of primordial fluctuations
-                0.96,    # n_s - spectral index
-                67.0,    # H0 - Hubble parameter
-                0.022,   # omega_b - baryon density
-                0.12,    # omega_c - CDM density
-                0.06,    # M_nu - neutrino mass in eV
-                -1.0,    # w0 - dark energy equation of state
-                0.0      # wa - dark energy evolution
-            ])
-            D = jnp.array(0.8)  # Growth factor
+        # Define realistic test inputs
+        # The real emulator expects 8 bias parameters: [b1, b2, b3, b4, b5, b6, b7, f]
+        biases = jnp.array([
+            2.0,    # b1 - linear bias
+            0.5,    # b2 - second-order bias
+            -0.4,   # b3 - third-order bias
+            0.1,    # b4 - fourth-order bias
+            0.05,   # b5
+            0.02,   # b6
+            0.01,   # b7
+            0.8     # f - growth rate
+        ])
 
-            def f(cosmo):
-                Pl = emulator.get_Pl(cosmo, biases, D)
-                return Pl.flatten() if hasattr(Pl, 'flatten') else Pl
+        # Cosmology parameters: z, ln10^10 As, ns, H0, omega_b, omega_c, Mnu, w0, wa
+        # As per nn_setup.json description
+        cosmology = jnp.array([
+            1.0,     # z - redshift
+            3.05,    # ln10^10 As - amplitude of primordial fluctuations
+            0.96,    # n_s - spectral index
+            67.0,    # H0 - Hubble parameter
+            0.022,   # omega_b - baryon density
+            0.12,    # omega_c - CDM density
+            0.06,    # M_nu - neutrino mass in eV
+            -1.0,    # w0 - dark energy equation of state
+            0.0      # wa - dark energy evolution
+        ])
+        D = jnp.array(0.8)  # Growth factor
 
-            # Try to compute Jacobian
-            jacobian = jacfwd(f)(cosmology)
+        def f(cosmo):
+            Pl = emulator.get_Pl(cosmo, biases, D)
+            return Pl.flatten() if hasattr(Pl, 'flatten') else Pl
 
-            # Basic checks
-            assert jacobian.shape[1] == len(cosmology), \
-                f"Jacobian should have {len(cosmology)} columns"
+        # Try to compute Jacobian
+        jacobian = jacfwd(f)(cosmology)
 
-            # Check for finite values
-            finite_mask = jnp.isfinite(jacobian)
-            finite_ratio = jnp.mean(finite_mask)
+        # Basic checks
+        assert jacobian.shape[1] == len(cosmology), \
+            f"Jacobian should have {len(cosmology)} columns"
 
-            assert finite_ratio > 0.95, \
-                f"Too many non-finite values in Jacobian. " \
-                f"Finite ratio: {finite_ratio:.2%}, " \
-                f"NaN count: {jnp.sum(jnp.isnan(jacobian))}, " \
-                f"Inf count: {jnp.sum(jnp.isinf(jacobian))}"
+        # Check for finite values
+        finite_mask = jnp.isfinite(jacobian)
+        finite_ratio = jnp.mean(finite_mask)
 
-        except Exception as e:
-            pytest.skip(f"Could not test with real emulator: {e}")
+        assert finite_ratio > 0.95, \
+            f"Too many non-finite values in Jacobian. " \
+            f"Finite ratio: {finite_ratio:.2%}, " \
+            f"NaN count: {jnp.sum(jnp.isnan(jacobian))}, " \
+            f"Inf count: {jnp.sum(jnp.isinf(jacobian))}"

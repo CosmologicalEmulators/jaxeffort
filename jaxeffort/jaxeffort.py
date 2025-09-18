@@ -85,8 +85,21 @@ class MLP:
         # Check postprocessing signature once and create appropriate JIT function
         if not hasattr(self, '_jit_get_component'):
             import inspect
-            sig = inspect.signature(self.postprocessing)
-            if len(sig.parameters) == 4:
+            try:
+                sig = inspect.signature(self.postprocessing)
+                num_params = len(sig.parameters)
+            except (ValueError, TypeError):
+                # Fallback for cases where inspect.signature fails (e.g., some lambdas in Python 3.10)
+                # Try calling with different signatures to determine the correct one
+                try:
+                    # Try with 4 parameters (test version)
+                    test_result = self.postprocessing(jnp.ones(1), jnp.ones(1), 1.0, self)
+                    num_params = 4
+                except (TypeError, ValueError):
+                    # Must be 3 parameters (production version)
+                    num_params = 3
+
+            if num_params == 4:
                 # Test version with emulator parameter
                 @partial(jax.jit, static_argnums=(0,))
                 def _jit_get_component_with_emulator(self, input, D):
