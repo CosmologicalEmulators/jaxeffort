@@ -232,26 +232,37 @@ class TestErrorRecovery:
 
     def test_complete_loading_failure_handling(self):
         """Verify handling when all emulators fail to load."""
-        import jaxeffort
-        from jaxeffort import _load_emulator_set
+        # Set environment to prevent auto-download
+        with patch.dict(os.environ, {'JAXEFFORT_NO_AUTO_DOWNLOAD': '1'}):
+            # Clear module cache to ensure clean import
+            if 'jaxeffort' in sys.modules:
+                del sys.modules['jaxeffort']
+            if 'jaxeffort.jaxeffort' in sys.modules:
+                del sys.modules['jaxeffort.jaxeffort']
+            if 'jaxeffort.data_fetcher' in sys.modules:
+                del sys.modules['jaxeffort.data_fetcher']
 
-        # Mock everything to fail
-        with patch('jaxeffort.data_fetcher.get_fetcher') as mock_get_fetcher:
-            mock_fetcher = MagicMock()
-            mock_fetcher.get_multipole_paths.side_effect = Exception("Network error")
-            mock_get_fetcher.return_value = mock_fetcher
+            # Now import with clean slate
+            import jaxeffort
+            from jaxeffort import _load_emulator_set
 
-            with warnings.catch_warnings(record=True) as w:
-                warnings.simplefilter("always")  # Ensure warnings are captured
-                config = {'zenodo_url': 'test.tar.gz', 'has_noise': False}
-                emulators = _load_emulator_set('failed_model', config, auto_download=True)
+            # Mock everything to fail
+            with patch('jaxeffort.data_fetcher.get_fetcher') as mock_get_fetcher:
+                mock_fetcher = MagicMock()
+                mock_fetcher.get_multipole_paths.side_effect = Exception("Network error")
+                mock_get_fetcher.return_value = mock_fetcher
 
-                # Should have warning (or the function handles the error silently)
-                if len(w) > 0:
+                with warnings.catch_warnings(record=True) as w:
+                    warnings.simplefilter("always")  # Ensure warnings are captured
+                    config = {'zenodo_url': 'test.tar.gz', 'has_noise': False}
+                    emulators = _load_emulator_set('failed_model', config, auto_download=True)
+
+                    # Should have warning
+                    assert len(w) > 0
                     assert "Could not initialize failed_model" in str(w[0].message)
 
-            # Should return empty structure
-            assert emulators == {'0': None, '2': None, '4': None}
+                # Should return empty structure
+                assert emulators == {'0': None, '2': None, '4': None}
 
 
 class TestConfigurationManagement:

@@ -281,7 +281,7 @@ class TestMLPMethods:
         emulator = load_multipole_emulator(str(emulator_path))
 
         # Test get_component method
-        x = jnp.ones(8)  # Mock emulator expects 8 inputs
+        x = jnp.ones(9)  # Mock emulator expects 9 inputs (as defined in mock_emulator_data)
         D = jnp.array(1.0)
         result = emulator.P11.get_component(x, D)
         assert result is not None

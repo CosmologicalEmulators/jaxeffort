@@ -91,7 +91,7 @@ class TestJITCompilationBehavior:
             k_grid=jnp.linspace(0.01, 0.3, 100),
             in_MinMax=jnp.array([[0, 1]] * 12),
             out_MinMax=jnp.array([[0, 1]] * 1000),
-            postprocessing=lambda i, o, d: o.reshape(100, 10),  # Reshape in postprocessing
+            postprocessing=lambda i, o, d: o,  # Return flat array for reshape by get_component
             emulator_description={},
             nn_dict={'n_hidden_layers': 2, 'n_output_features': 1000,
                     'layers': {'layer_1': {'n_neurons': 50, 'activation_function': 'tanh'},
@@ -215,17 +215,16 @@ class TestComponentComposition:
         mock_pct = self._create_mock_component(output_shape=(50, 7))
 
         # Create mock bias contraction
-        def mock_bias_contraction(b1, b2, bs2, b3nl):
-            # Return proper shape for contraction
-            return jnp.ones((33,))  # 4 + 22 + 7 = 33 components
+        def mock_bias_contraction(biases, stacked_array):
+            # Return proper shape for contraction - biases array contains [b1, b2, bs2, b3nl]
+            return jnp.ones((50,))  # Return array matching k_grid size
 
         # Create multipole emulator
         multipole = MultipoleEmulators(
             P11=mock_p11,
             Ploop=mock_ploop,
             Pct=mock_pct,
-            bias_contraction=mock_bias_contraction,
-            k_grid=jnp.linspace(0.01, 0.3, 50)
+            bias_contraction=mock_bias_contraction
         )
 
         # Test with various inputs
@@ -251,14 +250,17 @@ class TestComponentComposition:
             P11=mock_p11,
             Ploop=mock_ploop,
             Pct=mock_pct,
-            bias_contraction=lambda b1, b2, bs2, b3nl: jnp.ones((33,)),
-            k_grid=jnp.linspace(0.01, 0.3, 50)
+            bias_contraction=lambda biases, stacked_array: jnp.ones((50,))
         )
 
-        # Create noise emulator
+        # Create mock noise MLP component
+        mock_noise = self._create_mock_component(output_shape=(50, 3))  # Noise component
+
+        # Create noise emulator with correct constructor signature
         noise_emulator = MultipoleNoiseEmulator(
-            base_emulator=base_multipole,
-            ell=0  # Monopole
+            multipole_emulator=base_multipole,
+            noise_emulator=mock_noise,
+            bias_contraction=lambda biases, stacked_array: jnp.ones((50,))
         )
 
         # Test without noise (ceps = 0)
@@ -448,8 +450,14 @@ class TestRealWorldIntegration:
 
     def _create_mock_emulator_files(self, tmp_path):
         """Create mock emulator files for testing."""
-        # Weights
-        np.save(tmp_path / "weights.npy", np.random.randn(100, 50))
+        # Calculate correct number of weights for the network structure
+        # Input to layer1: 12 * 128 + 128 (bias) = 1664
+        # Layer1 to layer2: 128 * 128 + 128 (bias) = 16512
+        # Layer2 to layer3: 128 * 64 + 64 (bias) = 8256
+        # Layer3 to output: 64 * 1000 + 1000 (bias) = 65000
+        # Total: 1664 + 16512 + 8256 + 65000 = 91432
+        total_weights = 91432
+        np.save(tmp_path / "weights.npy", np.random.randn(total_weights))
 
         # Normalization
         np.save(tmp_path / "inminmax.npy", np.array([[0, 1]] * 12))
@@ -464,11 +472,11 @@ class TestRealWorldIntegration:
             'n_hidden_layers': 3,
             'n_input_features': 12,
             'n_output_features': 1000,
-            'activation': 'gelu',
+            'activation': 'relu',
             'layers': {
-                'layer_1': {'n_neurons': 128},
-                'layer_2': {'n_neurons': 128},
-                'layer_3': {'n_neurons': 64}
+                'layer_1': {'n_neurons': 128, 'activation_function': 'relu'},
+                'layer_2': {'n_neurons': 128, 'activation_function': 'relu'},
+                'layer_3': {'n_neurons': 64, 'activation_function': 'relu'}
             }
         }
         with open(tmp_path / "nn_setup.json", "w") as f:
