@@ -1,18 +1,66 @@
 [tool.poetry]
 name = "jaxeffort"
 version = "0.1.0"
-description = ""
+description = "JAX-based emulator for galaxy power spectra with bias modeling"
 authors = ["marcobonici <bonici.marco@gmail.com>"]
 readme = "README.md"
+packages = [{include = "jaxeffort"}]
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.10"
 flax = "^0.10.0"
 jax = "^0.4.30"
-quadax = "^0.2.9"
-interpax = "^0.3.9"
+jaxace = "^0.2.0"
+numpy = "^2.2.6"
 
+[tool.poetry.group.dev]
+optional = true
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.4.0"
+pytest-cov = "^4.1.0"
+pytest-xdist = "^3.3.0"
+ruff = "^0.1.0"
+black = "^23.0.0"
+isort = "^5.12.0"
+coverage = {extras = ["toml"], version = "^7.2.0"}
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["jaxeffort"]
+omit = ["*/tests/*", "*/test_*.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "pass",
+    "except ImportError:",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+select = ["E", "F", "W", "I", "N"]
+ignore = ["E501"]  # Line too long
+
+[tool.black]
+line-length = 100
+target-version = ['py310']
+
+[tool.isort]
+profile = "black"
+line_length = 100

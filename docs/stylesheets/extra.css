@@ -1,0 +1,29 @@
+/* Custom styles for jaxcapse documentation */
+
+/* Adjust code block appearance */
+.highlight pre {
+    background-color: #f5f5f5;
+}
+
+/* Dark mode code blocks */
+[data-md-color-scheme="slate"] .highlight pre {
+    background-color: #1e1e1e;
+}
+
+/* API documentation styling */
+.doc-class {
+    margin-top: 2em;
+    padding-top: 1em;
+    border-top: 1px solid #e0e0e0;
+}
+
+/* Parameter tables */
+.doc-param-table {
+    width: 100%;
+    margin: 1em 0;
+}
+
+/* Version selector */
+.md-version {
+    font-weight: bold;
+}

@@ -1,0 +1,151 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - "*" # Trigger on all branches as requested
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.8.0
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          installer-parallel: true
+
+      - name: Load cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Check lock file
+        run: poetry check --lock
+
+      - name: Install dependencies
+        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+        run: poetry install --no-interaction --no-root --with dev
+
+      - name: Install project
+        run: poetry install --no-interaction
+
+      - name: Run tests
+        run: |
+          poetry run pytest tests/ -v --tb=short --cov=jaxeffort --cov-report=term-missing --cov-report=xml --cov-report=html
+
+      - name: Display coverage report
+        if: always()
+        run: |
+          echo "=== Coverage Summary ==="
+          poetry run coverage report --show-missing || true
+          echo "========================"
+
+      - name: Upload coverage reports as artifacts
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: |
+            coverage.xml
+            htmlcov/
+          retention-days: 7
+
+      - name: Upload coverage to Codecov
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+  lint:
+    name: Linting
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.8.0
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Check lock file
+        run: poetry check --lock
+
+      - name: Install dependencies
+        run: |
+          poetry install --no-interaction --with dev
+
+      - name: Run linting
+        run: |
+          poetry run python -m pip install ruff
+          poetry run ruff check jaxeffort/ tests/
+        continue-on-error: true
+
+      - name: Check code formatting
+        run: |
+          poetry run python -m pip install black isort
+          poetry run black --check jaxeffort/ tests/
+          poetry run isort --check-only jaxeffort/ tests/
+        continue-on-error: true
+
+  test-minimal:
+    name: Minimal test suite (fast)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.8.0
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Test imports
+        run: |
+          poetry run python -c "import jaxeffort; print('✓ jaxeffort import successful')"
+          poetry run python -c "from jaxeffort import W0WaCDMCosmology, E_z, D_z, f_z; print('✓ background functions import successful')"
+          poetry run python -c "from jaxeffort import MultipoleEmulators, MultipoleNoiseEmulator; print('✓ emulator classes import successful')"
+          poetry run python -c "from jaxeffort import load_multipole_emulator, load_multipole_noise_emulator; print('✓ loader functions import successful')"
