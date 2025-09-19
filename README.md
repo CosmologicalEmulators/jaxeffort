@@ -35,9 +35,9 @@ trained_emu = jaxeffort.load_multipole_emulator("/path/to/emu/")
 Then you are good to go! You have to create input arrays for cosmological and bias parameters and retrieve your calculation result
 
 ```python3
-cosmo_params = np.array([...])  # 8 cosmological parameters
-bias_params = np.array([...])   # 4 bias parameters (b1, b2, bs2, b3nl)
-result = trained_emu.get_Pl(cosmo_params, bias_params)
+cosmo_params = np.array([...])  # cosmological parameters
+bias_params = np.array([...])   # bias parameters
+result = trained_emu.get_Pl(cosmo_params, bias_params, D)
 ```
 
 For a more detailed explanation, check the tutorial in the `notebooks` folder, which also shows a comparison with standard power spectrum calculations.
