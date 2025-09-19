@@ -14,15 +14,17 @@ import matplotlib.pyplot as plt
 # Add jaxeffort to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-# Set matplotlib style for better looking plots
-try:
-    plt.style.use('seaborn-v0_8-darkgrid')
-except:
-    plt.style.use('seaborn-darkgrid')
-
+# Set matplotlib style to match notebook
+plt.rcParams['text.usetex'] = True
 plt.rcParams['figure.dpi'] = 100
 plt.rcParams['savefig.dpi'] = 150
 plt.rcParams['font.size'] = 11
+plt.rcParams['axes.labelsize'] = 12
+plt.rcParams['xtick.labelsize'] = 10
+plt.rcParams['ytick.labelsize'] = 10
+plt.rcParams['legend.fontsize'] = 10
+plt.rcParams['figure.facecolor'] = 'white'
+plt.rcParams['axes.facecolor'] = 'white'
 
 
 def generate_multipoles_plot():
@@ -90,32 +92,27 @@ def generate_multipoles_plot():
     fig, axes = plt.subplots(1, 3, figsize=(16, 5))
 
     # Plot P0
-    axes[0].plot(k, k * P0_vals, 'b-', linewidth=2.5)
-    axes[0].set_xlabel(r'$k$ [h/Mpc]', fontsize=12)
-    axes[0].set_ylabel(r'$k P_0(k)$ [Mpc$^2$/h$^2$]', fontsize=12)
-    axes[0].set_title(r'Monopole ($\ell=0$)', fontsize=14, fontweight='bold')
-    axes[0].grid(True, alpha=0.3)
+    axes[0].plot(k, k * P0_vals, linewidth=2, label=r'$\ell=0$')
+    axes[0].set_xlabel(r'$k$')
+    axes[0].set_ylabel(r'$kP_0(k)$')
+    axes[0].legend()
     axes[0].set_xlim(k[0], k[-1])
 
     # Plot P2
-    axes[1].plot(k, k * P2_vals, 'r-', linewidth=2.5)
-    axes[1].set_xlabel(r'$k$ [h/Mpc]', fontsize=12)
-    axes[1].set_ylabel(r'$k P_2(k)$ [Mpc$^2$/h$^2$]', fontsize=12)
-    axes[1].set_title(r'Quadrupole ($\ell=2$)', fontsize=14, fontweight='bold')
-    axes[1].grid(True, alpha=0.3)
+    axes[1].plot(k, k * P2_vals, linewidth=2, label=r'$\ell=2$')
+    axes[1].set_xlabel(r'$k$')
+    axes[1].set_ylabel(r'$kP_2(k)$')
+    axes[1].legend()
     axes[1].set_xlim(k[0], k[-1])
 
     # Plot P4
-    axes[2].plot(k, k * P4_vals, 'g-', linewidth=2.5)
-    axes[2].set_xlabel(r'$k$ [h/Mpc]', fontsize=12)
-    axes[2].set_ylabel(r'$k P_4(k)$ [Mpc$^2$/h$^2$]', fontsize=12)
-    axes[2].set_title(r'Hexadecapole ($\ell=4$)', fontsize=14, fontweight='bold')
-    axes[2].grid(True, alpha=0.3)
+    axes[2].plot(k, k * P4_vals, linewidth=2, label=r'$\ell=4$')
+    axes[2].set_xlabel(r'$k$')
+    axes[2].set_ylabel(r'$kP_4(k)$')
+    axes[2].legend()
     axes[2].set_xlim(k[0], k[-1])
 
-    plt.suptitle('Galaxy Power Spectrum Multipoles (Fiducial Cosmology)',
-                 fontsize=16, fontweight='bold')
-    plt.tight_layout(rect=[0, 0.03, 1, 0.97])
+    plt.tight_layout()
 
     # Save figure
     output_dir = Path("docs/images")
@@ -194,26 +191,20 @@ def generate_jacobian_multipoles_plot():
 
     # Parameter names
     param_names = [r'$z$', r'$\ln(10^{10}A_s)$', r'$n_s$', r'$H_0$',
-                   r'$\omega_b$', r'$\omega_c$', r'$M_\nu$', r'$w_0$', r'$w_a$']
+                   r'$\omega_\mathrm{b}$', r'$\omega_\mathrm{c}$', r'$M_\nu$', r'$w_0$', r'$w_a$']
 
     # Create figure (3x3 grid)
     fig, axes = plt.subplots(3, 3, figsize=(16, 12))
     axes = axes.flatten()
 
-    colors = plt.cm.tab10(np.arange(9))
-
-    for i, (ax, name, color) in enumerate(zip(axes, param_names, colors)):
+    for i, (ax, name) in enumerate(zip(axes, param_names)):
         # Plot derivative
-        ax.plot(k, jacobian[:, i], color=color, linewidth=2.5)
-        ax.set_xlabel(r'$k$ [h/Mpc]', fontsize=11)
-        ax.set_ylabel(f'$\\partial P_0/\\partial$ {name}', fontsize=11)
-        ax.set_title(f'Sensitivity to {name}', fontsize=12, fontweight='bold')
-        ax.grid(True, alpha=0.3)
-        ax.axhline(0, color='k', linestyle='--', alpha=0.5, linewidth=0.8)
+        ax.plot(k, jacobian[:, i], linewidth=2)
+        ax.set_xlabel(r'$k$')
+        ax.set_ylabel(r'$\partial P_0(k)/\partial$' + name)
         ax.set_xlim(k[0], k[-1])
 
-    plt.suptitle('Galaxy Power Spectrum Monopole Jacobian', fontsize=16, fontweight='bold')
-    plt.tight_layout(rect=[0, 0.03, 1, 0.97])
+    plt.tight_layout()
 
     # Save
     output_dir = Path("docs/images")
@@ -286,20 +277,17 @@ def generate_comparison_plot():
         P4_vals = 2e3 * k**2 * np.exp(-((k - 0.1) / 0.2)**2) / (1 + (k/0.3)**2)
 
     # Create figure
-    fig, ax = plt.subplots(figsize=(10, 7))
+    fig, ax = plt.subplots(figsize=(10, 6))
 
     # Plot all multipoles
-    ax.plot(k, k * P0_vals, 'b-', linewidth=2.5, label=r'$\ell=0$ (Monopole)')
-    ax.plot(k, k * P2_vals, 'r-', linewidth=2.5, label=r'$\ell=2$ (Quadrupole)')
-    ax.plot(k, k * P4_vals, 'g-', linewidth=2.5, label=r'$\ell=4$ (Hexadecapole)')
+    ax.plot(k, k * P0_vals, linewidth=2, label=r'$\ell=0$')
+    ax.plot(k, k * P2_vals, linewidth=2, label=r'$\ell=2$')
+    ax.plot(k, k * P4_vals, linewidth=2, label=r'$\ell=4$')
 
-    ax.set_xlabel(r'$k$ [h/Mpc]', fontsize=14)
-    ax.set_ylabel(r'$k P_\ell(k)$ [Mpc$^2$/h$^2$]', fontsize=14)
-    ax.set_title('Galaxy Power Spectrum Multipoles', fontsize=16, fontweight='bold')
-    ax.legend(loc='upper right', fontsize=12, framealpha=0.95)
-    ax.grid(True, alpha=0.3)
+    ax.set_xlabel(r'$k$')
+    ax.set_ylabel(r'$kP_\ell(k)$')
+    ax.legend()
     ax.set_xlim(k[0], k[-1])
-    ax.axhline(0, color='k', linestyle='--', alpha=0.5, linewidth=0.8)
 
     plt.tight_layout()
 
