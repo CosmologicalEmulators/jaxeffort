@@ -1,0 +1,89 @@
+name: Docs
+
+on:
+  push:
+    branches: [main, develop] # run on either branch
+  workflow_dispatch: # manual reruns
+
+permissions:
+  contents: write # needed for pushes to gh-pages
+
+jobs:
+  deploy-docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1 — checkout full history so mike can read existing tags
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # 2 — Python + doc tooling
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.x"
+
+      - name: Install MkDocs + mike
+        run: |
+          python -m pip install --upgrade pip
+          pip install "mkdocs-material>=9,<10" \
+                      mkdocstrings[python] \
+                      mkdocs-material-extensions \
+                      mike
+          # Install jaxeffort to get version
+          pip install -e .
+          # Install matplotlib for plot generation
+          pip install matplotlib
+
+      # 3 — generate documentation plots
+      - name: Generate documentation plots
+        run: |
+          # Create images directory if it doesn't exist
+          mkdir -p docs/images
+          # Generate all plots for documentation
+          python generate_doc_plots.py
+
+      # 4 — need existing gh-pages branch for mike
+      - name: Fetch gh-pages history
+        run: git fetch origin gh-pages --depth=1 || true
+
+      # 5 — set author so mike can commit
+      - name: Configure git author
+        run: |
+          git config --local user.name  "${{ github.actor }}"
+          git config --local user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
+
+      # 6 — branch-specific deploy logic
+      - name: Deploy documentation
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${GITHUB_REF#refs/heads/}"
+
+          if [[ "$BRANCH" == "develop" ]]; then
+            echo "Deploying dev docs from develop"
+            mike deploy --push --update-aliases dev latest
+          elif [[ "$BRANCH" == "main" ]]; then
+            echo "Deploying stable docs from main"
+            # Get version from installed package
+            VERSION=$(python -c "from importlib.metadata import version; print(version('jaxeffort'))" 2>/dev/null)
+
+            if [[ -n "$VERSION" && "$VERSION" != "None" ]]; then
+              echo "Detected version: $VERSION"
+              # Remove old 'stable' if it exists (might be a version instead of alias)
+              echo "Cleaning up old stable deployment..."
+              mike delete --push stable 2>/dev/null || true
+
+              # Deploy with version number AND stable alias
+              mike deploy --push --update-aliases "$VERSION" stable
+            else
+              echo "Warning: Could not detect version, deploying as 'stable' only"
+              # Remove old stable and redeploy
+              mike delete --push stable 2>/dev/null || true
+              mike deploy --push stable
+            fi
+
+            mike set-default --push stable
+          else
+            echo "Branch $BRANCH is not configured for doc deploy" ; exit 0
+          fi
