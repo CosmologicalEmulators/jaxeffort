@@ -15,7 +15,16 @@ import matplotlib.pyplot as plt
 sys.path.insert(0, str(Path(__file__).parent))
 
 # Set matplotlib style to match notebook
-plt.rcParams['text.usetex'] = True
+# Try to use LaTeX if available, but don't fail if not
+try:
+    import subprocess
+    subprocess.check_output(['latex', '--version'])
+    plt.rcParams['text.usetex'] = True
+    print("LaTeX detected, using LaTeX rendering for plots")
+except (FileNotFoundError, subprocess.CalledProcessError):
+    plt.rcParams['text.usetex'] = False
+    print("LaTeX not available, using matplotlib's default math rendering")
+
 plt.rcParams['figure.dpi'] = 100
 plt.rcParams['savefig.dpi'] = 150
 plt.rcParams['font.size'] = 11
