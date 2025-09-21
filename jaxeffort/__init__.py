@@ -68,7 +68,7 @@ trained_emulators = {}
 # This can be easily extended with new models in the future
 EMULATOR_CONFIGS = {
     "pybird_mnuw0wacdm": {
-        "zenodo_url": "https://zenodo.org/records/17154523/files/trained_effort_pybird_mnuw0wacdm.tar.gz?download=1",
+        "zenodo_url": "https://zenodo.org/records/17172502/files/trained_effort_pybird_mnuw0wacdm.tar.gz?download=1",
         "description": "PyBird emulator for massive neutrinos, w0wa CDM cosmology",
         "has_noise": False,  # Set to True if the emulator includes noise (st/) component
     }
