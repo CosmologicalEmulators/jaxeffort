@@ -1,5 +1,5 @@
 # jaxeffort
-[![codecov](https://codecov.io/gh/CosmologicalEmulators/jaxeffort/graph/badge.svg?token=YOUR_TOKEN)](https://codecov.io/gh/CosmologicalEmulators/jaxeffort)
+[![codecov](https://codecov.io/gh/CosmologicalEmulators/jaxeffort/branch/develop/graph/badge.svg?token=GPLEGMIU08)](https://codecov.io/gh/CosmologicalEmulators/jaxeffort)
 [![arXiv](https://img.shields.io/badge/arXiv-2501.04639-b31b1b.svg)](https://arxiv.org/abs/2501.04639)
 [![Documentation](https://img.shields.io/badge/docs-stable-blue.svg)](https://cosmologicalemulators.github.io/jaxeffort/stable/)
 [![Documentation Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://cosmologicalemulators.github.io/jaxeffort/dev/)
