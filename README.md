@@ -1,4 +1,7 @@
 # jaxeffort
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](
+https://drive.google.com/file/d/1FxnXViYqIAg8Vu13Tippf0m7RIuSseEu/view?usp=sharing)
+
 [![codecov](https://codecov.io/gh/CosmologicalEmulators/jaxeffort/branch/develop/graph/badge.svg?token=GPLEGMIU08)](https://codecov.io/gh/CosmologicalEmulators/jaxeffort)
 [![arXiv](https://img.shields.io/badge/arXiv-2501.04639-b31b1b.svg)](https://arxiv.org/abs/2501.04639)
 [![Documentation](https://img.shields.io/badge/docs-stable-blue.svg)](https://cosmologicalemulators.github.io/jaxeffort/stable/)
