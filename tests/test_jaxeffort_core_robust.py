@@ -19,7 +19,10 @@ import pytest
 import tempfile
 import gc
 
-os.environ["JAXEFFORT_NO_AUTO_DOWNLOAD"] = "1"
+# NOTE: DO NOT set environment variables at module level!
+# This pollutes the environment for all subsequent tests in the session.
+# Use fixtures or context managers instead.
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import jax
@@ -29,12 +32,24 @@ import jaxeffort
 from jaxeffort.jaxeffort import (
     MLP,
     MultipoleEmulators,
-    load_component_emulator,
-    get_stoch_terms
+    load_component_emulator
 )
 
 # Ensure float64
 jax.config.update("jax_enable_x64", True)
+
+
+@pytest.fixture(scope="module", autouse=True)
+def disable_auto_download():
+    """Disable auto-download for this test module only."""
+    old_value = os.environ.get("JAXEFFORT_NO_AUTO_DOWNLOAD")
+    os.environ["JAXEFFORT_NO_AUTO_DOWNLOAD"] = "1"
+    yield
+    # Restore original value
+    if old_value is None:
+        os.environ.pop("JAXEFFORT_NO_AUTO_DOWNLOAD", None)
+    else:
+        os.environ["JAXEFFORT_NO_AUTO_DOWNLOAD"] = old_value
 
 
 class TestJITCompilationBehavior:
@@ -124,86 +139,6 @@ class TestJITCompilationBehavior:
         )
 
 
-class TestNumericalStability:
-    """Test numerical precision and stability."""
-
-    def test_maintains_float64_precision(self):
-        """Verify float64 precision is maintained throughout."""
-        # Create mock components
-        k_grid = jnp.linspace(0.01, 0.3, 50, dtype=jnp.float64)
-
-        # Test stochastic terms maintain precision
-        cϵ0 = jnp.array(1.0, dtype=jnp.float64)
-        cϵ1 = jnp.array(0.5, dtype=jnp.float64)
-        cϵ2 = jnp.array(0.1, dtype=jnp.float64)
-        n_bar = jnp.array(1e-3, dtype=jnp.float64)  # Typical galaxy number density
-
-        P0, P2 = get_stoch_terms(cϵ0, cϵ1, cϵ2, n_bar, k_grid)
-
-        assert P0.dtype == jnp.float64
-        assert P2.dtype == jnp.float64
-        assert jnp.all(jnp.isfinite(P0))
-        assert jnp.all(jnp.isfinite(P2))
-
-    def test_handles_extreme_values_gracefully(self):
-        """Test behavior with extreme parameter values."""
-        k_grid = jnp.logspace(-3, 0, 50)  # Wide k range
-
-        # Test with different stochastic parameters
-        cϵ0_large = jnp.array(10.0)
-        cϵ1_large = jnp.array(10.0)
-        cϵ2_large = jnp.array(10.0)
-        n_bar = jnp.array(1e-3)
-
-        P0_large, P2_large = get_stoch_terms(cϵ0_large, cϵ1_large, cϵ2_large, n_bar, k_grid)
-        assert jnp.all(jnp.isfinite(P0_large))
-        assert jnp.all(jnp.isfinite(P2_large))
-
-        # Test with very small parameters
-        cϵ0_small = jnp.array(0.01)
-        cϵ1_small = jnp.array(0.01)
-        cϵ2_small = jnp.array(0.01)
-        P0_small, P2_small = get_stoch_terms(cϵ0_small, cϵ1_small, cϵ2_small, n_bar, k_grid)
-        assert jnp.all(jnp.isfinite(P0_small))
-        assert jnp.all(jnp.isfinite(P2_small))
-
-        # Larger parameters should produce larger stochastic terms
-        assert jnp.mean(jnp.abs(P0_large)) > jnp.mean(jnp.abs(P0_small))
-
-    def test_gradient_stability(self):
-        """Test that gradients are stable and well-behaved."""
-        k_grid = jnp.linspace(0.01, 0.3, 50)
-
-        def stoch_func(params):
-            cϵ0, cϵ1, cϵ2 = params[:3]
-            n_bar = params[3]
-            result = get_stoch_terms(cϵ0, cϵ1, cϵ2, n_bar, k_grid)
-            return jnp.sum(result[0]) + jnp.sum(result[1])  # Sum both monopole and quadrupole
-
-        # Compute gradient
-        grad_func = grad(stoch_func)
-        params = jnp.array([1.0, 0.5, 0.1, 1e-3])  # cϵ0, cϵ1, cϵ2, n_bar
-        gradient = grad_func(params)
-
-        # Gradients should be finite
-        assert jnp.all(jnp.isfinite(gradient))
-
-        # Test numerical gradient for comparison
-        eps = 1e-5
-        numerical_grad = []
-        for i in range(4):
-            params_plus = params.at[i].add(eps)
-            params_minus = params.at[i].add(-eps)
-            num_grad = (stoch_func(params_plus) - stoch_func(params_minus)) / (2 * eps)
-            numerical_grad.append(num_grad)
-
-        numerical_grad = jnp.array(numerical_grad)
-
-        # Should be close to analytical gradient
-        # Using slightly relaxed tolerance due to numerical precision in gradient computation
-        assert jnp.allclose(gradient, numerical_grad, rtol=1e-3)
-
-
 class TestComponentComposition:
     """Test how components are composed into multipoles."""
 
@@ -227,124 +162,6 @@ class TestComponentComposition:
         # Should have correct shape
         assert P_mono.shape[0] > 0  # Has some k-points
         assert jnp.all(jnp.isfinite(P_mono))
-
-    def test_noise_emulator_adds_stochastic_correctly(self, tmp_path):
-        """Verify noise emulator correctly adds stochastic terms."""
-        pytest.skip("Noise emulator not currently available in pybird_mnuw0wacdm")
-
-
-class TestMemoryEfficiency:
-    """Test memory usage and efficiency."""
-
-    def test_no_memory_leaks_in_repeated_calls(self):
-        """Verify repeated calls don't leak memory."""
-        k_grid = jnp.linspace(0.01, 0.3, 100)
-
-        # Force garbage collection
-        gc.collect()
-
-        # Track memory over multiple calls
-        memory_usage = []
-
-        for i in range(100):
-            cϵ0 = jnp.array(1.0)
-            cϵ1 = jnp.array(0.5)
-            cϵ2 = jnp.array(0.1)
-            n_bar = jnp.array(1e-3)
-
-            result = get_stoch_terms(cϵ0, cϵ1, cϵ2, n_bar, k_grid)
-
-            # Periodically check memory
-            if i % 20 == 0:
-                gc.collect()
-                # In a real test, we'd use memory_profiler or tracemalloc
-                # Here we just ensure the result is reasonable
-                assert len(result) == 2  # Tuple of (monopole, quadrupole)
-                assert result[0].shape == (100,)  # Monopole
-                assert result[1].shape == (100,)  # Quadrupole
-
-        # Memory shouldn't grow significantly
-        # (This is a simplified test - real memory testing is more complex)
-        assert True  # Placeholder for actual memory assertion
-
-    def test_efficient_broadcasting(self):
-        """Test that operations use efficient broadcasting."""
-        # Test vectorized operations
-        k_grid = jnp.linspace(0.01, 0.3, 1000)  # Large k array
-
-        # Batch of parameters
-        batch_size = 10
-        cϵ0_batch = jnp.ones(batch_size)
-        cϵ1_batch = jnp.ones(batch_size) * 0.5
-        cϵ2_batch = jnp.ones(batch_size) * 0.1
-        n_bar_batch = jnp.ones(batch_size) * 1e-3
-
-        # Vectorize the function
-        vstoch = vmap(get_stoch_terms, in_axes=(0, 0, 0, 0, None))
-
-        # Should handle batches efficiently
-        results = vstoch(cϵ0_batch, cϵ1_batch, cϵ2_batch, n_bar_batch, k_grid)
-
-        # Results should be tuple of (batch_monopole, batch_quadrupole)
-        assert results[0].shape == (batch_size, 1000)  # Monopole
-        assert results[1].shape == (batch_size, 1000)  # Quadrupole
-        assert jnp.all(jnp.isfinite(results[0]))
-        assert jnp.all(jnp.isfinite(results[1]))
-
-
-class TestEdgeCases:
-    """Test edge cases and boundary conditions."""
-
-    def test_zero_bias_parameters(self):
-        """Test behavior with zero bias parameters."""
-        k_grid = jnp.linspace(0.01, 0.3, 50)
-
-        # All zeros (except n_bar to avoid division by zero)
-        cϵ0 = jnp.array(0.0)
-        cϵ1 = jnp.array(0.0)
-        cϵ2 = jnp.array(0.0)
-        n_bar = jnp.array(1e-6)  # Small but non-zero
-
-        P0, P2 = get_stoch_terms(cϵ0, cϵ1, cϵ2, n_bar, k_grid)
-
-        # Should handle zeros gracefully
-        assert jnp.all(jnp.isfinite(P0))
-        assert jnp.all(jnp.isfinite(P2))
-
-    def test_single_k_value(self):
-        """Test with single k value instead of array."""
-        k_single = jnp.array(0.1)
-        cϵ0 = jnp.array(1.0)
-        cϵ1 = jnp.array(0.5)
-        cϵ2 = jnp.array(0.1)
-        n_bar = jnp.array(1e-3)
-
-        P0, P2 = get_stoch_terms(cϵ0, cϵ1, cϵ2, n_bar, k_single)
-
-        # Should work with scalar k
-        assert P0.shape == ()  # scalar
-        assert P2.shape == ()  # scalar
-        assert jnp.isfinite(P0)
-        assert jnp.isfinite(P2)
-
-    def test_extreme_k_ranges(self):
-        """Test with very small and very large k values."""
-        # Very small k
-        k_small = jnp.array([1e-5, 1e-4, 1e-3])
-        cϵ0 = jnp.array(1.0)
-        cϵ1 = jnp.array(0.5)
-        cϵ2 = jnp.array(0.1)
-        n_bar = jnp.array(1e-3)
-
-        P0_small, P2_small = get_stoch_terms(cϵ0, cϵ1, cϵ2, n_bar, k_small)
-        assert jnp.all(jnp.isfinite(P0_small))
-        assert jnp.all(jnp.isfinite(P2_small))
-
-        # Very large k
-        k_large = jnp.array([1.0, 10.0, 100.0])
-        P0_large, P2_large = get_stoch_terms(cϵ0, cϵ1, cϵ2, n_bar, k_large)
-        assert jnp.all(jnp.isfinite(P0_large))
-        assert jnp.all(jnp.isfinite(P2_large))
 
 
 class TestRealWorldIntegration:
@@ -371,26 +188,6 @@ class TestRealWorldIntegration:
 
         assert result.ndim == 2  # (n_k, n_components)
         assert jnp.all(jnp.isfinite(result))
-
-    def test_jacobian_computation(self):
-        """Test that Jacobians can be computed for sensitivity analysis."""
-        k_grid = jnp.linspace(0.01, 0.3, 50)
-
-        def forward(params):
-            cϵ0, cϵ1, cϵ2, n_bar = params[:4]
-            P0, P2 = get_stoch_terms(cϵ0, cϵ1, cϵ2, n_bar, k_grid)
-            return jnp.sum(P0) + jnp.sum(P2)  # Scalar output for simple Jacobian
-
-        # Compute Jacobian
-        params = jnp.array([1.0, 0.5, 0.1, 1e-3])  # cϵ0, cϵ1, cϵ2, n_bar
-        jac = jax.jacfwd(forward)(params)
-
-        # Should have gradient for each parameter
-        assert jac.shape == (4,)
-        assert jnp.all(jnp.isfinite(jac))
-
-        # n_bar should have effect (appears linearly in noise term)
-        assert jnp.abs(jac[3]) > 0
 
     def _create_mock_emulator_files(self, tmp_path):
         """Create mock emulator files for testing."""

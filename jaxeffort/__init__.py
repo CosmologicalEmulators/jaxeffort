@@ -9,8 +9,30 @@ import os
 import warnings
 from pathlib import Path
 
-# Import core functionality
-from jaxeffort.jaxeffort import *
+# Import core functionality explicitly (not using *)
+from jaxeffort.jaxeffort import (
+    MLP,
+    MultipoleEmulators,
+    load_multipole_emulator,
+    load_component_emulator,
+    load_bias_combination,
+    load_jacobian_bias_combination,
+    load_preprocessing,
+    load_stoch_model,
+    # Cosmology functions from jaxace (re-exported for convenience)
+    W0WaCDMCosmology,
+    a_z, E_a, E_z, dlogEdloga, Ωm_a,
+    D_z, f_z, D_f_z,
+    r_z, dA_z, dL_z,
+    ρc_z, Ωtot_z,
+    F, dFdy, ΩνE2,
+    growth_solver, growth_ode_system,
+    # Neural network infrastructure from jaxace
+    init_emulator,
+    FlaxEmulator,
+    maximin,
+    inv_maximin,
+)
 
 # Import data fetcher functionality
 from .data_fetcher import (
@@ -21,16 +43,26 @@ from .data_fetcher import (
     check_for_updates,
     force_update,
     get_cache_info,
-    clear_all_cache
+    clear_all_cache,
 )
 
-# Explicitly export stochastic term function
-from jaxeffort.jaxeffort import get_stoch_terms
+# Initialize the trained_emulators dictionary BEFORE __all__
+trained_emulators = {}
 
-# Import the loading functions we'll use
-from jaxeffort.jaxeffort import (
-    load_multipole_emulator,
-)
+# Define available emulator configurations BEFORE __all__
+EMULATOR_CONFIGS = {
+    "pybird_mnuw0wacdm": {
+        "zenodo_url": "https://zenodo.org/records/17436464/files/trained_effort_pybird_mnuw0wacdm.tar.gz?download=1",
+        "description": "PyBird emulator for massive neutrinos, w0wa CDM cosmology",
+        "has_noise": False,  # Set to True if the emulator includes noise (st/) component
+    }
+    # Future models can be added here:
+    # "camb_lcdm": {
+    #     "zenodo_url": "https://zenodo.org/...",
+    #     "description": "CAMB-based LCDM model",
+    #     "has_noise": True,
+    # }
+}
 
 __all__ = [
     # Core emulator classes
@@ -38,7 +70,11 @@ __all__ = [
     "MultipoleEmulators",
     # Loading functions
     "load_multipole_emulator",
-    "get_stoch_terms",
+    "load_component_emulator",
+    "load_bias_combination",
+    "load_jacobian_bias_combination",
+    "load_preprocessing",
+    "load_stoch_model",
     # Data fetcher
     "get_emulator_path",
     "get_fetcher",
@@ -54,28 +90,22 @@ __all__ = [
     "EMULATOR_CONFIGS",
     "add_emulator_config",
     "reload_emulators",
+    # Cosmology functions (from jaxace)
+    "W0WaCDMCosmology",
+    "a_z", "E_a", "E_z", "dlogEdloga", "Ωm_a",
+    "D_z", "f_z", "D_f_z",
+    "r_z", "dA_z", "dL_z",
+    "ρc_z", "Ωtot_z",
+    "F", "dFdy", "ΩνE2",
+    "growth_solver", "growth_ode_system",
+    # Neural network infrastructure (from jaxace)
+    "init_emulator",
+    "FlaxEmulator",
+    "maximin",
+    "inv_maximin",
 ]
 
-__version__ = "0.1.0"
-
-# Initialize the trained_emulators dictionary
-trained_emulators = {}
-
-# Define available emulator configurations
-# This can be easily extended with new models in the future
-EMULATOR_CONFIGS = {
-    "pybird_mnuw0wacdm": {
-        "zenodo_url": "https://zenodo.org/records/17436464/files/trained_effort_pybird_mnuw0wacdm.tar.gz?download=1",
-        "description": "PyBird emulator for massive neutrinos, w0wa CDM cosmology",
-        "has_noise": False,  # Set to True if the emulator includes noise (st/) component
-    }
-    # Future models can be added here:
-    # "camb_lcdm": {
-    #     "zenodo_url": "https://zenodo.org/...",
-    #     "description": "CAMB-based LCDM model",
-    #     "has_noise": True,
-    # }
-}
+__version__ = "0.2.1"
 
 
 def _load_emulator_set(model_name: str, config: dict, auto_download: bool = True):
@@ -103,7 +133,7 @@ def _load_emulator_set(model_name: str, config: dict, auto_download: bool = True
         fetcher = get_fetcher(
             zenodo_url=config["zenodo_url"],
             emulator_name=model_name,
-            expected_checksum=config.get("checksum")
+            expected_checksum=config.get("checksum"),
         )
 
         # Get multipole paths
@@ -147,9 +177,7 @@ if not os.environ.get("JAXEFFORT_NO_AUTO_DOWNLOAD"):
         try:
             print(f"  Loading {model_name}...")
             trained_emulators[model_name] = _load_emulator_set(
-                model_name,
-                config,
-                auto_download=True
+                model_name, config, auto_download=True
             )
 
             # Report loading status
@@ -171,12 +199,14 @@ else:
         trained_emulators[model_name] = {"0": None, "2": None, "4": None}
 
 
-def add_emulator_config(model_name: str,
-                        zenodo_url: str,
-                        description: str = None,
-                        has_noise: bool = False,
-                        checksum: str = None,
-                        auto_load: bool = True):
+def add_emulator_config(
+    model_name: str,
+    zenodo_url: str,
+    description: str = None,
+    has_noise: bool = False,
+    checksum: str = None,
+    auto_load: bool = True,
+):
     """
     Add a new emulator configuration and optionally load it.
 
@@ -206,7 +236,7 @@ def add_emulator_config(model_name: str,
     EMULATOR_CONFIGS[model_name] = {
         "zenodo_url": zenodo_url,
         "description": description or f"{model_name} emulators",
-        "has_noise": has_noise
+        "has_noise": has_noise,
     }
 
     # Add checksum if provided
@@ -217,9 +247,7 @@ def add_emulator_config(model_name: str,
     if auto_load:
         print(f"Loading {model_name} emulator...")
         trained_emulators[model_name] = _load_emulator_set(
-            model_name,
-            EMULATOR_CONFIGS[model_name],
-            auto_download=True
+            model_name, EMULATOR_CONFIGS[model_name], auto_download=True
         )
 
         # Report status
@@ -256,12 +284,12 @@ def reload_emulators(model_name: str = None):
         if model_name in EMULATOR_CONFIGS:
             print(f"Reloading {model_name}...")
             trained_emulators[model_name] = _load_emulator_set(
-                model_name,
-                EMULATOR_CONFIGS[model_name],
-                auto_download=True
+                model_name, EMULATOR_CONFIGS[model_name], auto_download=True
             )
         else:
-            raise ValueError(f"Unknown model: {model_name}. Available: {list(EMULATOR_CONFIGS.keys())}")
+            raise ValueError(
+                f"Unknown model: {model_name}. Available: {list(EMULATOR_CONFIGS.keys())}"
+            )
     else:
         # Reload all models
         print("Reloading all emulators...")

@@ -18,11 +18,25 @@ from unittest.mock import patch, MagicMock, Mock
 import pytest
 import warnings
 
-# Prevent auto-download during testing
-os.environ["JAXEFFORT_NO_AUTO_DOWNLOAD"] = "1"
+# NOTE: DO NOT set environment variables at module level!
+# This pollutes the environment for all subsequent tests in the session.
+# Use fixtures or context managers instead.
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+@pytest.fixture(scope="module", autouse=True)
+def disable_auto_download():
+    """Disable auto-download for this test module only."""
+    old_value = os.environ.get("JAXEFFORT_NO_AUTO_DOWNLOAD")
+    os.environ["JAXEFFORT_NO_AUTO_DOWNLOAD"] = "1"
+    yield
+    # Restore original value
+    if old_value is None:
+        os.environ.pop("JAXEFFORT_NO_AUTO_DOWNLOAD", None)
+    else:
+        os.environ["JAXEFFORT_NO_AUTO_DOWNLOAD"] = old_value
 
 
 class TestAutoLoadingBehavior:
@@ -257,7 +271,6 @@ class TestInitializationIntegrity:
         # Core functions that should be available
         expected_exports = [
             'load_multipole_emulator',
-            'get_stoch_terms',
             'clear_cache',
             'force_update',
             'check_for_updates',

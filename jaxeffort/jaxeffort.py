@@ -468,27 +468,5 @@ def load_multipole_emulator(folder_path: str) -> MultipoleEmulators:
                              multipole_bias_combination, stoch_model, jacobian_bias_combination)
 
 
-def get_stoch_terms(cϵ0, cϵ1, cϵ2, n_bar, k_grid, k_nl=0.7):
-    """
-    Compute stochastic power spectrum terms.
-
-    Implements the stochastic contributions to the power spectrum
-    following the Effective Field Theory (EFT) approach.
-
-    Args:
-        cϵ0: Constant stochastic parameter (epsilon_0)
-        cϵ1: k^2-dependent stochastic parameter (epsilon_1)
-        cϵ2: k^2-dependent stochastic parameter for quadrupole (epsilon_2)
-        n_bar: Mean number density of galaxies
-        k_grid: Array of k values
-        k_nl: Non-linear scale (default: 0.7)
-
-    Returns:
-        Tuple of (P_stoch_0, P_stoch_2) for monopole and quadrupole
-    """
-    k_grid = jnp.asarray(k_grid)
-    P_stoch_0 = (1 / n_bar) * (cϵ0 + cϵ1 * (k_grid / k_nl)**2)
-    P_stoch_2 = (1 / n_bar) * (cϵ2 * (k_grid / k_nl)**2)
-    return P_stoch_0, P_stoch_2
 
 

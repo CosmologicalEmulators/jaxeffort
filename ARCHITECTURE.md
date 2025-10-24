@@ -232,8 +232,8 @@ graph TD
     Factory --> load_multipole_emulator
     Composition --> MultipoleEmulators
     Strategy --> bias_contraction
-    
-    JIT --> get_stoch_terms
+
+    JIT --> MLP
     Grad --> MLP
     Vmap --> MultipoleEmulators
 ```
