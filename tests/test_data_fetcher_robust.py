@@ -23,11 +23,25 @@ import urllib.error
 import urllib.request
 import shutil
 
-# Set environment variable before importing jaxeffort
-os.environ["JAXEFFORT_NO_AUTO_DOWNLOAD"] = "1"
+# NOTE: DO NOT set environment variables at module level!
+# This pollutes the environment for all subsequent tests in the session.
+# Use fixtures or context managers instead.
 
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+@pytest.fixture(scope="module", autouse=True)
+def disable_auto_download():
+    """Disable auto-download for this test module only."""
+    old_value = os.environ.get("JAXEFFORT_NO_AUTO_DOWNLOAD")
+    os.environ["JAXEFFORT_NO_AUTO_DOWNLOAD"] = "1"
+    yield
+    # Restore original value
+    if old_value is None:
+        os.environ.pop("JAXEFFORT_NO_AUTO_DOWNLOAD", None)
+    else:
+        os.environ["JAXEFFORT_NO_AUTO_DOWNLOAD"] = old_value
 
 from jaxeffort.data_fetcher import MultipoleDataFetcher
 

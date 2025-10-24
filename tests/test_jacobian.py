@@ -30,7 +30,27 @@ class TestJacobianComputation:
     def multipole_emulator(self):
         """Load real multipole emulator."""
         import jaxeffort
+        import os
+
         emulator = jaxeffort.trained_emulators.get('pybird_mnuw0wacdm', {}).get('0')
+
+        # If emulator is None, it might be because JAXEFFORT_NO_AUTO_DOWNLOAD was set
+        # in a previous test. Try reloading with auto-download enabled.
+        if emulator is None:
+            # Temporarily enable auto-download
+            old_value = os.environ.get("JAXEFFORT_NO_AUTO_DOWNLOAD")
+            if old_value is not None:
+                os.environ.pop("JAXEFFORT_NO_AUTO_DOWNLOAD", None)
+
+            try:
+                # Try to reload the emulators
+                jaxeffort.reload_emulators("pybird_mnuw0wacdm")
+                emulator = jaxeffort.trained_emulators.get('pybird_mnuw0wacdm', {}).get('0')
+            finally:
+                # Restore old value
+                if old_value is not None:
+                    os.environ["JAXEFFORT_NO_AUTO_DOWNLOAD"] = old_value
+
         if emulator is None:
             pytest.skip("Real emulator not available (not downloaded)")
         return emulator
@@ -198,7 +218,27 @@ class TestJacobianEdgeCases:
     def multipole_emulator(self):
         """Load real multipole emulator."""
         import jaxeffort
+        import os
+
         emulator = jaxeffort.trained_emulators.get('pybird_mnuw0wacdm', {}).get('0')
+
+        # If emulator is None, it might be because JAXEFFORT_NO_AUTO_DOWNLOAD was set
+        # in a previous test. Try reloading with auto-download enabled.
+        if emulator is None:
+            # Temporarily enable auto-download
+            old_value = os.environ.get("JAXEFFORT_NO_AUTO_DOWNLOAD")
+            if old_value is not None:
+                os.environ.pop("JAXEFFORT_NO_AUTO_DOWNLOAD", None)
+
+            try:
+                # Try to reload the emulators
+                jaxeffort.reload_emulators("pybird_mnuw0wacdm")
+                emulator = jaxeffort.trained_emulators.get('pybird_mnuw0wacdm', {}).get('0')
+            finally:
+                # Restore old value
+                if old_value is not None:
+                    os.environ["JAXEFFORT_NO_AUTO_DOWNLOAD"] = old_value
+
         if emulator is None:
             pytest.skip("Real emulator not available (not downloaded)")
         return emulator

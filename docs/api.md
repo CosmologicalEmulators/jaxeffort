@@ -90,19 +90,12 @@ P4 = jaxeffort.trained_emulators["pybird_mnuw0wacdm"]["4"]
 
 ## Utility Functions
 
-### get_stoch_terms
+### clear_cache
 
-Compute stochastic EFT terms.
+Clear the local cache of downloaded emulator data.
 
 ```python
-stoch = jaxeffort.get_stoch_terms(k, ceps0, ceps1, ceps2)
+jaxeffort.clear_cache()
 ```
 
-**Parameters:**
-- `k`: Wavenumber array
-- `ceps0`: Constant stochastic term
-- `ceps1`: Linear stochastic term coefficient
-- `ceps2`: Quadratic stochastic term coefficient
-
-**Returns:**
-- Array of stochastic contributions
+Removes all cached emulator files from `~/.jaxeffort_data/`.
