@@ -62,8 +62,8 @@ class TestEffortJLComparison:
             pytest.skip("Monopole (l=0) emulator not available (not downloaded)")
 
         # Input arrays of ones (matching Effort.jl test case)
-        # Real PyBird emulator expects 8 bias parameters
-        biases = jnp.ones(8, dtype=jnp.float64)
+        # Real PyBird emulator expects 11 bias parameters
+        biases = jnp.ones(11, dtype=jnp.float64)
 
         # Cosmological parameters - 9 values expected by the real emulator
         cosmology = jnp.ones(9, dtype=jnp.float64)
@@ -144,7 +144,7 @@ class TestEffortJLComparison:
             pytest.skip("Monopole (l=0) emulator not available")
 
         # Input arrays of ones
-        biases = jnp.ones(8, dtype=jnp.float64)
+        biases = jnp.ones(11, dtype=jnp.float64)
         cosmology = jnp.ones(9, dtype=jnp.float64)
         D = jnp.float64(1.0)
 
@@ -184,7 +184,7 @@ class TestEffortJLComparison:
             pytest.skip("Monopole (l=0) emulator not available")
 
         # Create Float64 inputs
-        biases = jnp.ones(8, dtype=jnp.float64)
+        biases = jnp.ones(11, dtype=jnp.float64)
         cosmology = jnp.ones(9, dtype=jnp.float64)
         D = jnp.float64(1.0)
 
@@ -211,7 +211,7 @@ class TestEffortJLComparison:
             pytest.skip("Quadrupole (l=2) emulator not available (not downloaded)")
 
         # Input arrays of ones (same as l=0 test)
-        biases = jnp.ones(8, dtype=jnp.float64)
+        biases = jnp.ones(11, dtype=jnp.float64)
         cosmology = jnp.ones(9, dtype=jnp.float64)
         D = jnp.float64(1.0)
 
@@ -265,7 +265,7 @@ class TestEffortJLComparison:
             pytest.skip("Hexadecapole (l=4) emulator not available (not downloaded)")
 
         # Input arrays of ones (same as l=0 and l=2 tests)
-        biases = jnp.ones(8, dtype=jnp.float64)
+        biases = jnp.ones(11, dtype=jnp.float64)
         cosmology = jnp.ones(9, dtype=jnp.float64)
         D = jnp.float64(1.0)
 

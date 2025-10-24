@@ -86,6 +86,10 @@ class TestDynamicEmulatorConfig:
         """Test reloading a specific emulator."""
         import jaxeffort
 
+        # Skip if emulators not available
+        if jaxeffort.trained_emulators.get("pybird_mnuw0wacdm", {}).get("0") is None:
+            pytest.skip("Emulators not downloaded")
+
         # This should reload the pybird model (which is already loaded)
         result = jaxeffort.reload_emulators("pybird_mnuw0wacdm")
 
@@ -119,6 +123,10 @@ class TestEmulatorAccessFunctions:
     def test_get_default_emulator_with_multipole(self):
         """Test accessing emulators through trained_emulators dict."""
         import jaxeffort
+
+        # Skip if emulators not available
+        if jaxeffort.trained_emulators.get("pybird_mnuw0wacdm", {}).get("0") is None:
+            pytest.skip("Emulators not downloaded")
 
         # Get l=0 emulator via new simplified structure
         emulator_0 = jaxeffort.trained_emulators["pybird_mnuw0wacdm"]["0"]

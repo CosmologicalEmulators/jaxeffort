@@ -68,30 +68,88 @@ def create_mock_k_grid(n_k=50):
     return np.logspace(-3, 0, n_k)  # k from 0.001 to 1 h/Mpc
 
 
-def create_mock_postprocessing_file():
+def create_mock_postprocessing_file(n_components):
     """Create a mock postprocessing Python file content."""
-    return '''"""Mock postprocessing for testing."""
+    return f'''"""Mock postprocessing for testing."""
 import jax.numpy as jnp
 
 def postprocessing(input_params, output, D, emulator):
     """Mock postprocessing function."""
-    # Simple passthrough for testing
+    # Apply D^2 scaling
+    # Return flat array - MLP.get_component will reshape it
     return output * D**2
 '''
 
 
-def create_mock_bias_contraction_file():
-    """Create a mock bias contraction Python file content."""
-    return '''"""Mock bias contraction for testing."""
+def create_mock_bias_combination_file():
+    """Create a mock bias combination Python file content (PyBird-style with 11 params)."""
+    return '''"""Mock bias combination for testing."""
 import jax.numpy as jnp
 
-def BiasContraction(biases, stacked_array):
-    """Mock bias contraction function."""
-    # Simple linear combination for testing
-    # biases: [b1, b2, bs2, b3nl]
-    # For simplicity, just use b1 scaling
-    b1 = biases[0]
-    return stacked_array * b1**2
+def BiasCombination(biases):
+    """Mock PyBird bias combination function.
+
+    Parameters
+    ----------
+    biases : array
+        11 bias parameters: [b1, b2, b3, b4, b5, b6, b7, f, cϵ0, cϵ1, cϵ2]
+
+    Returns
+    -------
+    array
+        24 bias coefficients
+    """
+    b1, b2, b3, b4, b5, b6, b7, f, ce0, ce1, ce2 = biases
+    return jnp.array([
+        b1**2, 2*b1*f, f**2, 1., b1, b2, b3, b4,
+        b1*b1, b1*b2, b1*b3, b1*b4,
+        b2*b2, b2*b4, b4*b4,
+        2*b1*b5, 2*b1*b6, 2*b1*b7,
+        2*f*b5, 2*f*b6, 2*f*b7,
+        ce0, ce1, ce2*f
+    ])
+'''
+
+
+def create_mock_jacobian_bias_combination_file():
+    """Create a mock Jacobian bias combination Python file content."""
+    return '''"""Mock Jacobian bias combination for testing."""
+import jax.numpy as jnp
+
+def JacobianBiasCombination(biases):
+    """Mock Jacobian of PyBird bias combination.
+
+    Returns (24, 11) Jacobian matrix.
+    """
+    # Simplified mock - just return zeros for testing
+    # Real implementation would have all derivatives
+    return jnp.zeros((24, 11))
+'''
+
+
+def create_mock_stoch_model_file():
+    """Create a mock StochModel Python file content."""
+    return '''"""Mock StochModel for testing."""
+import jax.numpy as jnp
+
+def StochModel(k):
+    """Mock stochastic model function.
+
+    Parameters
+    ----------
+    k : array
+        k-grid
+
+    Returns
+    -------
+    array
+        Stochastic components (len(k), 3)
+    """
+    n_k = len(k)
+    km2 = 0.7**2
+    k_rescaled = k * k / km2
+    comp0 = jnp.ones(n_k)
+    return jnp.column_stack((comp0, k_rescaled, k_rescaled/3))
 '''
 
 
@@ -102,12 +160,22 @@ def create_mock_emulator_directory(base_path=None):
     else:
         os.makedirs(base_path, exist_ok=True)
 
-    nn_dict = create_mock_nn_dict()
+    # Define proper output sizes for each component (matching PyBird structure)
+    # For k-grid of 50 points: P11 has 4 components, Ploop has 22, Pct has 7
+    component_specs = {
+        "11": 4 * 50,     # P11: 4 components × 50 k-points = 200
+        "loop": 22 * 50,  # Ploop: 22 components × 50 k-points = 1100
+        "ct": 7 * 50      # Pct: 7 components × 50 k-points = 350
+    }
 
     # Create component directories
-    for component in ["11", "loop", "ct"]:
+    for component, n_outputs in component_specs.items():
         comp_path = Path(base_path) / component
         comp_path.mkdir(exist_ok=True)
+
+        # Create component-specific nn_dict
+        nn_dict = create_mock_nn_dict()
+        nn_dict["n_output_features"] = n_outputs
 
         # Save nn_setup.json
         with open(comp_path / "nn_setup.json", "w") as f:
@@ -127,50 +195,26 @@ def create_mock_emulator_directory(base_path=None):
         k_grid = create_mock_k_grid()
         np.save(comp_path / "k.npy", k_grid)
 
-        # Save postprocessing.py
+        # Save postprocessing.py (needs to reshape output)
         with open(comp_path / "postprocessing.py", "w") as f:
-            f.write(create_mock_postprocessing_file())
+            if component == "11":
+                n_components = 4
+            elif component == "loop":
+                n_components = 22
+            else:  # ct
+                n_components = 7
+            f.write(create_mock_postprocessing_file(n_components))
 
-    # Save multipole-level bias contraction
-    with open(Path(base_path) / "biascontraction.py", "w") as f:
-        f.write(create_mock_bias_contraction_file())
+    # Save multipole-level bias combination (new PyBird-style)
+    with open(Path(base_path) / "biascombination.py", "w") as f:
+        f.write(create_mock_bias_combination_file())
 
-    return base_path
+    # Save Jacobian bias combination
+    with open(Path(base_path) / "jacbiascombination.py", "w") as f:
+        f.write(create_mock_jacobian_bias_combination_file())
 
-
-def create_mock_noise_emulator_directory(base_path=None):
-    """Create a mock emulator directory with noise component."""
-    if base_path is None:
-        base_path = tempfile.mkdtemp(prefix="mock_noise_emulator_")
-
-    # First create the standard multipole emulator
-    create_mock_emulator_directory(base_path)
-
-    # Add noise component
-    nn_dict = create_mock_nn_dict()
-    noise_path = Path(base_path) / "st"
-    noise_path.mkdir(exist_ok=True)
-
-    # Save nn_setup.json for noise
-    with open(noise_path / "nn_setup.json", "w") as f:
-        json.dump(nn_dict, f)
-
-    # Save weights
-    weights = create_mock_weights(nn_dict)
-    np.save(noise_path / "weights.npy", weights)
-
-    # Save normalization arrays
-    in_minmax = create_mock_minmax(nn_dict["n_input_features"])
-    out_minmax = create_mock_minmax(nn_dict["n_output_features"])
-    np.save(noise_path / "inminmax.npy", in_minmax)
-    np.save(noise_path / "outminmax.npy", out_minmax)
-
-    # Save k-grid
-    k_grid = create_mock_k_grid()
-    np.save(noise_path / "k.npy", k_grid)
-
-    # Save postprocessing.py
-    with open(noise_path / "postprocessing.py", "w") as f:
-        f.write(create_mock_postprocessing_file())
+    # Save StochModel
+    with open(Path(base_path) / "stochmodel.py", "w") as f:
+        f.write(create_mock_stoch_model_file())
 
     return base_path

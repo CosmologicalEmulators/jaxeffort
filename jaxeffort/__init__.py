@@ -30,17 +30,14 @@ from jaxeffort.jaxeffort import get_stoch_terms
 # Import the loading functions we'll use
 from jaxeffort.jaxeffort import (
     load_multipole_emulator,
-    load_multipole_noise_emulator,
 )
 
 __all__ = [
     # Core emulator classes
     "MLP",
     "MultipoleEmulators",
-    "MultipoleNoiseEmulator",
     # Loading functions
     "load_multipole_emulator",
-    "load_multipole_noise_emulator",
     "get_stoch_terms",
     # Data fetcher
     "get_emulator_path",
@@ -68,7 +65,7 @@ trained_emulators = {}
 # This can be easily extended with new models in the future
 EMULATOR_CONFIGS = {
     "pybird_mnuw0wacdm": {
-        "zenodo_url": "https://zenodo.org/records/17172502/files/trained_effort_pybird_mnuw0wacdm.tar.gz?download=1",
+        "zenodo_url": "https://zenodo.org/records/17436464/files/trained_effort_pybird_mnuw0wacdm.tar.gz?download=1",
         "description": "PyBird emulator for massive neutrinos, w0wa CDM cosmology",
         "has_noise": False,  # Set to True if the emulator includes noise (st/) component
     }
@@ -117,12 +114,8 @@ def _load_emulator_set(model_name: str, config: dict, auto_download: bool = True
             for l, mp_path in multipole_paths.items():
                 if mp_path and mp_path.exists():
                     try:
-                        if config.get("has_noise", False):
-                            # Load multipole emulator with noise component
-                            emulators[str(l)] = load_multipole_noise_emulator(str(mp_path))
-                        else:
-                            # Load standard multipole emulator
-                            emulators[str(l)] = load_multipole_emulator(str(mp_path))
+                        # Load standard multipole emulator
+                        emulators[str(l)] = load_multipole_emulator(str(mp_path))
                     except Exception as e:
                         emulators[str(l)] = None
                         warnings.warn(f"Error loading multipole l={l} from {mp_path}: {e}")
