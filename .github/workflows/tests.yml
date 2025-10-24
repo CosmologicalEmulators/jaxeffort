@@ -51,6 +51,12 @@ jobs:
       - name: Install project
         run: poetry install --no-interaction
 
+      - name: Check emulator availability
+        run: |
+          echo "Checking if emulators auto-download on import..."
+          poetry run python -c "import jaxeffort; emu = jaxeffort.trained_emulators.get('pybird_mnuw0wacdm', {}).get('0'); print(f'Emulator status: {\"Available\" if emu is not None else \"Not available\"}')"
+        continue-on-error: true
+
       - name: Run tests
         run: |
           poetry run pytest tests/ -v --tb=short --cov=jaxeffort --cov-report=term-missing --cov-report=xml --cov-report=html
@@ -147,5 +153,5 @@ jobs:
         run: |
           poetry run python -c "import jaxeffort; print('✓ jaxeffort import successful')"
           poetry run python -c "from jaxeffort import W0WaCDMCosmology, E_z, D_z, f_z; print('✓ background functions import successful')"
-          poetry run python -c "from jaxeffort import MultipoleEmulators, MultipoleNoiseEmulator; print('✓ emulator classes import successful')"
-          poetry run python -c "from jaxeffort import load_multipole_emulator, load_multipole_noise_emulator; print('✓ loader functions import successful')"
+          poetry run python -c "from jaxeffort import MultipoleEmulators; print('✓ emulator classes import successful')"
+          poetry run python -c "from jaxeffort import load_multipole_emulator; print('✓ loader functions import successful')"

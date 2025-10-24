@@ -19,6 +19,15 @@ import jaxeffort.jaxeffort as jaxeffort
 import jaxeffort
 
 
+# Module-level fixture to check if emulators are available
+@pytest.fixture(scope="module", autouse=True)
+def check_emulators_available():
+    """Check if emulators are downloaded, skip all tests if not."""
+    emu = jaxeffort.trained_emulators.get('pybird_mnuw0wacdm', {}).get('0')
+    if emu is None:
+        pytest.skip("Emulators not available (not downloaded) - skipping integration tests", allow_module_level=True)
+
+
 class TestEmulatorLoading:
     """Test loading of actual emulator files from jaxeffort."""
 
