@@ -120,6 +120,9 @@ class MultipoleDataFetcher:
             True if download successful, False otherwise
         """
         try:
+            # Ensure parent directory exists
+            destination.parent.mkdir(parents=True, exist_ok=True)
+
             # Create temporary file for download
             temp_file = destination.with_suffix(".tmp")
 
@@ -182,7 +185,8 @@ class MultipoleDataFetcher:
 
             extract_to.mkdir(parents=True, exist_ok=True)
 
-            with tarfile.open(tar_path, "r:gz") as tar:
+            # Auto-detect compression format (supports .tar.gz, .tar.xz, .tar.bz2, etc.)
+            with tarfile.open(tar_path, "r:*") as tar:
                 # Extract all files
                 tar.extractall(extract_to)
 
