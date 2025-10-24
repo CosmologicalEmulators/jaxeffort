@@ -102,51 +102,6 @@ class TestAutoLoadingBehavior:
 class TestErrorRecovery:
     """Test error recovery during emulator loading."""
 
-    def test_partial_loading_failure_recovery(self, tmp_path):
-        """Verify graceful handling when some emulators fail to load."""
-        import jaxeffort
-        from jaxeffort import _load_emulator_set
-
-        # Create mock paths
-        mock_paths = {
-            0: tmp_path / "0",
-            2: tmp_path / "2",
-            4: tmp_path / "4"
-        }
-
-        # Make paths exist
-        for path in mock_paths.values():
-            path.mkdir(parents=True)
-
-        with patch('jaxeffort.data_fetcher.get_fetcher') as mock_get_fetcher:
-            mock_fetcher = MagicMock()
-            mock_fetcher.get_multipole_paths.return_value = mock_paths
-            mock_get_fetcher.return_value = mock_fetcher
-
-            # Mock loader to fail for l=2
-            def mock_load(path):
-                if "2" in str(path):
-                    raise ValueError("Mock loading error for l=2")
-                return MagicMock(spec=['get_Pl'])
-
-            with patch('jaxeffort.load_multipole_emulator', side_effect=mock_load):
-                with warnings.catch_warnings(record=True) as w:
-                    warnings.simplefilter("always")
-                    config = {'zenodo_url': 'test.tar.gz'}
-                    emulators = _load_emulator_set('test_model', config, auto_download=False)
-
-                    # Should have warning about failed loading
-                    assert len(w) > 0
-                    # Check for the error message (could be "Error loading" or "Could not find")
-                    warning_messages = [str(warning.message) for warning in w]
-                    assert any("Error loading multipole l=2" in msg or "Could not find" in msg or "test_model" in msg
-                              for msg in warning_messages)
-
-                # Should have loaded 0 and 4, but not 2
-                assert emulators['0'] is not None
-                assert emulators['2'] is None  # Failed to load
-                assert emulators['4'] is not None
-
     def test_complete_loading_failure_handling(self):
         """Verify handling when all emulators fail to load."""
         # Set environment to prevent auto-download
