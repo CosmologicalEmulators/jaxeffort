@@ -767,9 +767,9 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#get_stoch_terms" class="md-nav__link">
+  <a href="#clear_cache" class="md-nav__link">
     <span class="md-ellipsis">
-      get_stoch_terms
+      clear_cache
     </span>
   </a>
   
@@ -898,17 +898,11 @@
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">P4</span> <span class="o">=</span> <span class="n">jaxeffort</span><span class="o">.</span><span class="n">trained_emulators</span><span class="p">[</span><span class="s2">&quot;pybird_mnuw0wacdm&quot;</span><span class="p">][</span><span class="s2">&quot;4&quot;</span><span class="p">]</span>
 </span></code></pre></div></p>
 <h2 id="utility-functions">Utility Functions<a class="headerlink" href="#utility-functions" title="Permanent link">&para;</a></h2>
-<h3 id="get_stoch_terms">get_stoch_terms<a class="headerlink" href="#get_stoch_terms" title="Permanent link">&para;</a></h3>
-<p>Compute stochastic EFT terms.</p>
-<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">stoch</span> <span class="o">=</span> <span class="n">jaxeffort</span><span class="o">.</span><span class="n">get_stoch_terms</span><span class="p">(</span><span class="n">k</span><span class="p">,</span> <span class="n">ceps0</span><span class="p">,</span> <span class="n">ceps1</span><span class="p">,</span> <span class="n">ceps2</span><span class="p">)</span>
+<h3 id="clear_cache">clear_cache<a class="headerlink" href="#clear_cache" title="Permanent link">&para;</a></h3>
+<p>Clear the local cache of downloaded emulator data.</p>
+<div class="language-python highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">jaxeffort</span><span class="o">.</span><span class="n">clear_cache</span><span class="p">()</span>
 </span></code></pre></div>
-<p><strong>Parameters:</strong>
-- <code>k</code>: Wavenumber array
-- <code>ceps0</code>: Constant stochastic term
-- <code>ceps1</code>: Linear stochastic term coefficient
-- <code>ceps2</code>: Quadratic stochastic term coefficient</p>
-<p><strong>Returns:</strong>
-- Array of stochastic contributions</p>
+<p>Removes all cached emulator files from <code>~/.jaxeffort_data/</code>.</p>
 
 
 
