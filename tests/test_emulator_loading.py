@@ -13,7 +13,7 @@ from jaxeffort import (
     load_multipole_emulator,
     load_multipole_noise_emulator,
     load_preprocessing,
-    load_bias_contraction,
+    load_bias_combination,
 )
 
 from tests.fixtures.mock_emulator_data import (
@@ -236,35 +236,34 @@ def postprocessing(input_params, output, D, emulator):
         result = postproc(None, jnp.array([1.0, 2.0]), 1.0, None)
         np.testing.assert_allclose(result, jnp.array([2.0, 4.0]))
 
-    def test_load_bias_contraction(self):
-        """Test loading bias contraction function."""
-        # Create mock bias contraction file
+    def test_load_bias_combination(self):
+        """Test loading bias combination function (supports legacy BiasContraction name)."""
+        # Create mock bias combination file
         bias_content = '''
-def BiasContraction(biases, stacked_array):
-    """Test bias contraction."""
+def BiasCombination(biases):
+    """Test bias combination."""
     b1 = biases[0]
-    return stacked_array * b1
+    return b1
 '''
-        bias_path = Path(self.temp_dir) / "biascontraction.py"
+        bias_path = Path(self.temp_dir) / "biascombination.py"
         bias_path.write_text(bias_content)
 
-        # Load bias contraction
-        bias_func = load_bias_contraction(self.temp_dir)
+        # Load bias combination
+        bias_func = load_bias_combination(self.temp_dir)
 
         # Test function
         biases = jnp.array([2.0, 0.0, 0.0, 0.0])
-        data = jnp.array([1.0, 2.0, 3.0])
-        result = bias_func(biases, data)
-        np.testing.assert_allclose(result, jnp.array([2.0, 4.0, 6.0]))
+        result = bias_func(biases)
+        assert result == 2.0
 
-    def test_missing_bias_contraction_required(self):
-        """Test that missing required bias contraction raises error."""
+    def test_missing_bias_combination_required(self):
+        """Test that missing required bias combination raises error."""
         with pytest.raises(FileNotFoundError):
-            load_bias_contraction(self.temp_dir, required=True)
+            load_bias_combination(self.temp_dir, required=True)
 
-    def test_missing_bias_contraction_optional(self):
-        """Test that missing optional bias contraction returns None."""
-        result = load_bias_contraction(self.temp_dir, required=False)
+    def test_missing_bias_combination_optional(self):
+        """Test that missing optional bias combination returns None."""
+        result = load_bias_combination(self.temp_dir, required=False)
         assert result is None
 
 
