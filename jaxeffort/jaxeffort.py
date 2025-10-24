@@ -266,47 +266,6 @@ class MultipoleEmulators:
         return self._jit_get_Pl_jacobian(self, cosmology, biases, D)
 
 
-class MultipoleNoiseEmulator:
-    def __init__(self, multipole_emulator: MultipoleEmulators, noise_emulator: MLP, bias_combination: callable):
-        """
-        Initializes the MultipoleNoiseEmulator with a multipole emulator and a noise emulator.
-
-        Args:
-            multipole_emulator (MultipoleEmulators): An instance of the MultipoleEmulators class.
-            noise_emulator (MLP): An instance of the MLP class representing the noise emulator.
-            bias_combination (callable): Overall bias combination function.
-        """
-        self.multipole_emulator = multipole_emulator
-        self.noise_emulator = noise_emulator
-        self.bias_combination = bias_combination
-
-    def get_Pl(self, cosmology, biases, D):
-        """
-        Get P_ℓ with noise, using bias combination.
-
-        This method uses JIT compilation for performance.
-        """
-        # Create JIT-compiled version on first call
-        if not hasattr(self, '_jit_get_Pl'):
-            @partial(jax.jit, static_argnums=(0,))
-            def _jit_get_Pl(self, cosmology, biases, D):
-                # Get all components
-                P11_comp, Ploop_comp, Pct_comp = self.multipole_emulator.get_multipole_components(cosmology, D)
-                Noise_comp = self.noise_emulator.get_component(cosmology, D)
-                stacked_array = jnp.hstack((P11_comp, Ploop_comp, Pct_comp, Noise_comp))
-                # Use the overall bias combination
-                return self.bias_combination(biases, stacked_array)
-            self._jit_get_Pl = _jit_get_Pl
-
-        return self._jit_get_Pl(self, cosmology, biases, D)
-
-    def get_Pl_no_bias(self, cosmology, D):
-        """Get raw components without bias combination."""
-        P11_output, Ploop_output, Pct_output = self.multipole_emulator.get_multipole_components(cosmology, D)
-        Noise_output = self.noise_emulator.get_component(cosmology, D)
-        return jnp.hstack((P11_output, Ploop_output, Pct_output, Noise_output))
-
-
 def load_preprocessing(root_path, filename):
     """Load postprocessing function from Python file."""
     spec = importlib.util.spec_from_file_location(filename, root_path + "/" + filename + ".py")
@@ -533,44 +492,3 @@ def get_stoch_terms(cϵ0, cϵ1, cϵ2, n_bar, k_grid, k_nl=0.7):
     return P_stoch_0, P_stoch_2
 
 
-def load_multipole_noise_emulator(folder_path: str) -> MultipoleNoiseEmulator:
-    """
-    Loads the multipole noise emulator, including a multipole emulator and a noise emulator.
-    Expects bias contraction at the top level for the combined emulator.
-
-    Args:
-        folder_path (str): The path to the folder containing the trained emulators.
-                           The folder should contain subfolders for the multipole emulator and a 'st' subfolder for the noise emulator.
-
-    Returns:
-        MultipoleNoiseEmulator: An instance of the MultipoleNoiseEmulator class.
-    """
-    from pathlib import Path
-    folder_path = Path(folder_path)
-
-    # Define subfolder paths
-    P11_path = folder_path / "11"
-    Ploop_path = folder_path / "loop"
-    Pct_path = folder_path / "ct"
-    noise_path = folder_path / "st"
-
-    # Load component emulators (no bias combination at component level)
-    P11_emulator = load_component_emulator(P11_path)
-    Ploop_emulator = load_component_emulator(Ploop_path)
-    Pct_emulator = load_component_emulator(Pct_path)
-    noise_emulator = load_component_emulator(noise_path)
-
-    # For MultipoleNoiseEmulator, we need a bias combination at the top level
-    # This handles all components including noise
-    overall_bias_combination = load_bias_combination(str(folder_path), required=True)
-
-    # Create multipole emulator with a placeholder bias combination
-    # (The actual combination happens at the MultipoleNoiseEmulator level)
-    def placeholder_combination(biases, stacked_array):
-        # This is never called - MultipoleNoiseEmulator uses its own bias_combination
-        raise NotImplementedError("This should not be called")
-
-    multipole_emulator = MultipoleEmulators(P11_emulator, Ploop_emulator, Pct_emulator, placeholder_combination)
-
-    # Return the MultipoleNoiseEmulator instance with bias combination
-    return MultipoleNoiseEmulator(multipole_emulator, noise_emulator, overall_bias_combination)

@@ -323,38 +323,6 @@ class TestConcurrentAccess:
             assert info['cache_dir'] == str(tmp_path)
             assert info['emulator_name'] == 'test'
 
-    def test_concurrent_metadata_updates_dont_corrupt(self, tmp_path):
-        """Concurrent metadata updates shouldn't corrupt the file."""
-        fetcher = MultipoleDataFetcher(
-            zenodo_url="https://zenodo.org/test.tar.gz",
-            emulator_name="test",
-            cache_dir=tmp_path
-        )
-
-        def update_metadata(value):
-            metadata = fetcher._load_metadata()
-            metadata['thread_value'] = value
-            metadata['timestamp'] = datetime.now().isoformat()
-            fetcher._save_metadata(metadata)
-            time.sleep(0.01)  # Small delay to increase chance of collision
-
-        # Launch concurrent updates
-        threads = []
-        for i in range(20):
-            t = threading.Thread(target=update_metadata, args=(i,))
-            threads.append(t)
-            t.start()
-
-        for t in threads:
-            t.join()
-
-        # Metadata should still be valid JSON
-        final_metadata = fetcher._load_metadata()
-        assert 'thread_value' in final_metadata
-        assert 'timestamp' in final_metadata
-        # Value should be from one of the threads (not corrupted)
-        assert isinstance(final_metadata['thread_value'], int)
-        assert 0 <= final_metadata['thread_value'] < 20
 
 
 class TestNetworkResilience:

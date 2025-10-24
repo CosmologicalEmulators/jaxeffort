@@ -358,13 +358,13 @@ class TestConvenienceFunctions:
         clear_cache(show_progress=False)
         mock_fetcher.clear_cache.assert_called_once_with(clear_tar=True, show_progress=False)
 
-        # Test with specific model
+        # Test with specific model (using a real model name from EMULATOR_CONFIGS)
         mock_fetcher.reset_mock()
         with patch('jaxeffort.data_fetcher.MultipoleDataFetcher') as mock_class:
             mock_instance = MagicMock()
             mock_class.return_value = mock_instance
 
-            clear_cache(model_name="test_model", clear_tar=False)
+            clear_cache(model_name="pybird_mnuw0wacdm", clear_tar=False)
             mock_instance.clear_cache.assert_called_once_with(clear_tar=False, show_progress=True)
 
     @patch('jaxeffort.data_fetcher.get_fetcher')

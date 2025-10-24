@@ -395,9 +395,7 @@ class TestFunctionSignatures:
         essential_exports = [
             'MLP',
             'MultipoleEmulators',
-            'MultipoleNoiseEmulator',
             'load_multipole_emulator',
-            'load_multipole_noise_emulator',
             'get_stoch_terms',
             'trained_emulators',
             'EMULATOR_CONFIGS'

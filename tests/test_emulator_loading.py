@@ -11,19 +11,17 @@ from pathlib import Path
 from jaxeffort import (
     load_component_emulator,
     load_multipole_emulator,
-    load_multipole_noise_emulator,
     load_preprocessing,
     load_bias_combination,
-)
-
-from tests.fixtures.mock_emulator_data import (
-    create_mock_emulator_directory,
-    create_mock_noise_emulator_directory,
 )
 
 from tests.fixtures.sample_cosmologies import (
     get_test_cosmology_array,
     get_test_biases,
+)
+
+from tests.fixtures.mock_emulator_data import (
+    create_mock_emulator_directory,
 )
 
 
@@ -75,33 +73,27 @@ class TestComponentEmulatorLoading:
 class TestMultipoleEmulatorLoading:
     """Test loading multipole emulators."""
 
-    def setup_method(self):
-        """Create temporary directory with mock emulator data."""
-        self.temp_dir = tempfile.mkdtemp(prefix="test_multipole_")
-        self.mock_path = create_mock_emulator_directory(self.temp_dir)
+    @pytest.fixture
+    def multipole_emu(self):
+        """Get real multipole emulator."""
+        import jaxeffort
+        emulator = jaxeffort.trained_emulators.get('pybird_mnuw0wacdm', {}).get('0')
+        if emulator is None:
+            pytest.skip("Real emulator not available (not downloaded)")
+        return emulator
 
-    def teardown_method(self):
-        """Clean up temporary directory."""
-        if hasattr(self, 'temp_dir'):
-            shutil.rmtree(self.temp_dir, ignore_errors=True)
-
-    def test_load_multipole_emulator(self):
+    def test_load_multipole_emulator(self, multipole_emu):
         """Test loading a complete multipole emulator."""
-        # Load multipole emulator
-        multipole_emu = load_multipole_emulator(self.mock_path)
-
         # Check that all components are loaded
         assert multipole_emu is not None
         assert multipole_emu.P11 is not None
         assert multipole_emu.Ploop is not None
         assert multipole_emu.Pct is not None
-        assert multipole_emu.bias_contraction is not None
+        assert multipole_emu.bias_combination is not None
+        assert multipole_emu.stoch_model is not None
 
-    def test_multipole_components_output(self):
+    def test_multipole_components_output(self, multipole_emu):
         """Test getting multipole components."""
-        # Load emulator
-        multipole_emu = load_multipole_emulator(self.mock_path)
-
         # Create test input
         cosmo = get_test_cosmology_array()
         D = 1.0  # Growth factor
@@ -114,20 +106,17 @@ class TestMultipoleEmulatorLoading:
         assert Ploop is not None
         assert Pct is not None
 
-        # Check shapes are consistent
-        assert P11.shape == Ploop.shape
-        assert Ploop.shape == Pct.shape
+        # Check shapes are consistent (same number of k-points)
+        assert P11.shape[0] == Ploop.shape[0]
+        assert Ploop.shape[0] == Pct.shape[0]
 
         # Check that outputs are finite
         assert np.all(np.isfinite(P11))
         assert np.all(np.isfinite(Ploop))
         assert np.all(np.isfinite(Pct))
 
-    def test_get_Pl_with_bias(self):
-        """Test getting P_ℓ with bias contraction."""
-        # Load emulator
-        multipole_emu = load_multipole_emulator(self.mock_path)
-
+    def test_get_Pl_with_bias(self, multipole_emu):
+        """Test getting P_ℓ with bias combination."""
         # Create test inputs
         cosmo = get_test_cosmology_array()
         biases = get_test_biases()
@@ -141,11 +130,8 @@ class TestMultipoleEmulatorLoading:
         assert Pl.ndim >= 1
         assert np.all(np.isfinite(Pl))
 
-    def test_get_Pl_no_bias(self):
+    def test_get_Pl_no_bias(self, multipole_emu):
         """Test getting raw P_ℓ components without bias."""
-        # Load emulator
-        multipole_emu = load_multipole_emulator(self.mock_path)
-
         # Create test inputs
         cosmo = get_test_cosmology_array()
         D = 1.0
@@ -157,53 +143,6 @@ class TestMultipoleEmulatorLoading:
         assert raw_components is not None
         assert raw_components.ndim == 2
         assert np.all(np.isfinite(raw_components))
-
-
-class TestMultipoleNoiseEmulatorLoading:
-    """Test loading multipole emulators with noise component."""
-
-    def setup_method(self):
-        """Create temporary directory with mock emulator data."""
-        self.temp_dir = tempfile.mkdtemp(prefix="test_noise_")
-        self.mock_path = create_mock_noise_emulator_directory(self.temp_dir)
-
-    def teardown_method(self):
-        """Clean up temporary directory."""
-        if hasattr(self, 'temp_dir'):
-            shutil.rmtree(self.temp_dir, ignore_errors=True)
-
-    def test_load_multipole_noise_emulator(self):
-        """Test loading a multipole emulator with noise."""
-        # Load emulator
-        noise_emu = load_multipole_noise_emulator(self.mock_path)
-
-        # Check all components
-        assert noise_emu is not None
-        assert noise_emu.multipole_emulator is not None
-        assert noise_emu.noise_emulator is not None
-        assert noise_emu.bias_contraction is not None
-
-        # Check multipole components
-        assert noise_emu.multipole_emulator.P11 is not None
-        assert noise_emu.multipole_emulator.Ploop is not None
-        assert noise_emu.multipole_emulator.Pct is not None
-
-    def test_noise_emulator_get_Pl(self):
-        """Test getting P_ℓ with noise component."""
-        # Load emulator
-        noise_emu = load_multipole_noise_emulator(self.mock_path)
-
-        # Create test inputs
-        cosmo = get_test_cosmology_array()
-        biases = get_test_biases()
-        D = 1.0
-
-        # Get P_ℓ with noise
-        Pl = noise_emu.get_Pl(cosmo, biases, D)
-
-        # Check output
-        assert Pl is not None
-        assert np.all(np.isfinite(Pl))
 
 
 class TestUtilityFunctions:

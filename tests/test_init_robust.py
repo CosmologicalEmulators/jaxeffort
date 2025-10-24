@@ -99,93 +99,6 @@ class TestAutoLoadingBehavior:
                     assert jaxeffort.trained_emulators[model_name][multipole] is None
 
 
-class TestNoiseEmulatorLoading:
-    """Test loading of emulators with noise components."""
-
-    def test_noise_emulator_detection(self, tmp_path):
-        """Verify noise emulators are loaded when st/ folder exists."""
-        import jaxeffort
-        from jaxeffort import _load_emulator_set
-
-        # Create mock emulator structure WITH noise
-        mock_paths = {}
-        for l in [0, 2, 4]:
-            mp_path = tmp_path / str(l)
-            # Create standard components
-            for comp in ["11", "loop", "ct"]:
-                (mp_path / comp).mkdir(parents=True)
-                # Add mock files
-                (mp_path / comp / "weights.npy").write_text("mock")
-
-            # Add noise component
-            (mp_path / "st").mkdir(parents=True)
-            (mp_path / "st" / "weights.npy").write_text("mock noise")
-
-            mock_paths[l] = mp_path
-
-        # Mock the fetcher to return our paths
-        with patch('jaxeffort.data_fetcher.get_fetcher') as mock_get_fetcher:
-            mock_fetcher = MagicMock()
-            mock_fetcher.get_multipole_paths.return_value = mock_paths
-            mock_get_fetcher.return_value = mock_fetcher
-
-            # Mock the actual loader functions
-            with patch('jaxeffort.load_multipole_noise_emulator') as mock_noise_load:
-                with patch('jaxeffort.load_multipole_emulator') as mock_standard_load:
-                    mock_noise_load.return_value = MagicMock(spec=['get_Pl'])
-                    mock_standard_load.return_value = MagicMock(spec=['get_Pl'])
-
-                    # Load with noise flag
-                    config = {
-                        'zenodo_url': 'test.tar.gz',
-                        'has_noise': True  # This should trigger noise loading
-                    }
-
-                    emulators = _load_emulator_set('test_noise_model', config, auto_download=False)
-
-                    # Should have called noise loader, not standard
-                    assert mock_noise_load.call_count == 3  # For l=0,2,4
-                    assert mock_standard_load.call_count == 0
-
-    def test_fallback_to_standard_when_no_noise(self, tmp_path):
-        """Verify standard loading when noise component missing."""
-        import jaxeffort
-        from jaxeffort import _load_emulator_set
-
-        # Create mock emulator structure WITHOUT noise
-        mock_paths = {}
-        for l in [0, 2, 4]:
-            mp_path = tmp_path / str(l)
-            # Create only standard components (no st/)
-            for comp in ["11", "loop", "ct"]:
-                (mp_path / comp).mkdir(parents=True)
-                (mp_path / comp / "weights.npy").write_text("mock")
-            mock_paths[l] = mp_path
-
-        # Mock the fetcher
-        with patch('jaxeffort.data_fetcher.get_fetcher') as mock_get_fetcher:
-            mock_fetcher = MagicMock()
-            mock_fetcher.get_multipole_paths.return_value = mock_paths
-            mock_get_fetcher.return_value = mock_fetcher
-
-            # Mock loaders
-            with patch('jaxeffort.load_multipole_noise_emulator') as mock_noise_load:
-                with patch('jaxeffort.load_multipole_emulator') as mock_standard_load:
-                    mock_standard_load.return_value = MagicMock(spec=['get_Pl'])
-
-                    # Load without noise flag
-                    config = {
-                        'zenodo_url': 'test.tar.gz',
-                        'has_noise': False  # Should use standard loading
-                    }
-
-                    emulators = _load_emulator_set('test_standard_model', config, auto_download=False)
-
-                    # Should have called standard loader
-                    assert mock_standard_load.call_count == 3
-                    assert mock_noise_load.call_count == 0
-
-
 class TestErrorRecovery:
     """Test error recovery during emulator loading."""
 
@@ -385,7 +298,6 @@ class TestInitializationIntegrity:
         # Core functions that should be available
         expected_exports = [
             'load_multipole_emulator',
-            'load_multipole_noise_emulator',
             'get_stoch_terms',
             'clear_cache',
             'force_update',

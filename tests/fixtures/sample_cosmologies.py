@@ -36,9 +36,9 @@ def get_test_cosmology_array():
 
 
 def get_test_biases():
-    """Get standard galaxy bias parameters for testing."""
-    # Standard bias parameters [b1, b2, bs2, b3nl]
-    return jnp.array([1.0, 0.0, 0.0, 0.0])
+    """Get standard galaxy bias parameters for testing (PyBird)."""
+    # PyBird bias parameters: [b1, b2, b3, b4, b5, b6, b7, f, cϵ0, cϵ1, cϵ2]
+    return jnp.array([2.0, 0.5, -0.4, 0.1, 0.05, 0.02, 0.01, 0.8, 1.0, 0.5, 0.2])
 
 
 def get_test_redshifts():
