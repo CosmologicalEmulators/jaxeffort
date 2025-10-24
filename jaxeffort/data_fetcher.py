@@ -56,11 +56,13 @@ class MultipoleDataFetcher:
     The data is cached in ~/.jaxeffort_data/ by default.
     """
 
-    def __init__(self,
-                 zenodo_url: str,
-                 emulator_name: str = "pybird_mnuw0wacdm",
-                 cache_dir: Optional[Union[str, Path]] = None,
-                 expected_checksum: Optional[str] = None):
+    def __init__(
+        self,
+        zenodo_url: str,
+        emulator_name: str = "pybird_mnuw0wacdm",
+        cache_dir: Optional[Union[str, Path]] = None,
+        expected_checksum: Optional[str] = None,
+    ):
         """
         Initialize the data fetcher.
 
@@ -90,7 +92,7 @@ class MultipoleDataFetcher:
 
         # Path for the downloaded tar.gz file
         # Extract filename from URL
-        tar_filename = self.zenodo_url.split('/')[-1].split('?')[0]
+        tar_filename = self.zenodo_url.split("/")[-1].split("?")[0]
         self.tar_path = self.cache_dir / tar_filename
 
         # Path for extracted emulators
@@ -99,8 +101,7 @@ class MultipoleDataFetcher:
         # Path for metadata file
         self.metadata_file = self.cache_dir / f"{self.emulator_name}_metadata.json"
 
-    def _download_file(self, url: str, destination: Path,
-                      show_progress: bool = True) -> bool:
+    def _download_file(self, url: str, destination: Path, show_progress: bool = True) -> bool:
         """
         Download a file from URL to destination.
 
@@ -120,7 +121,7 @@ class MultipoleDataFetcher:
         """
         try:
             # Create temporary file for download
-            temp_file = destination.with_suffix('.tmp')
+            temp_file = destination.with_suffix(".tmp")
 
             def download_hook(block_num, block_size, total_size):
                 if show_progress and total_size > 0:
@@ -128,14 +129,18 @@ class MultipoleDataFetcher:
                     percent = min(downloaded * 100 / total_size, 100)
                     mb_downloaded = downloaded / (1024 * 1024)
                     mb_total = total_size / (1024 * 1024)
-                    print(f"\rDownloading: {percent:.1f}% ({mb_downloaded:.1f}/{mb_total:.1f} MB)",
-                          end='', flush=True)
+                    print(
+                        f"\rDownloading: {percent:.1f}% ({mb_downloaded:.1f}/{mb_total:.1f} MB)",
+                        end="",
+                        flush=True,
+                    )
 
             if show_progress:
                 print(f"Downloading multipole emulator data from Zenodo...")
 
-            urllib.request.urlretrieve(url, temp_file,
-                                      reporthook=download_hook if show_progress else None)
+            urllib.request.urlretrieve(
+                url, temp_file, reporthook=download_hook if show_progress else None
+            )
 
             if show_progress:
                 print()  # New line after progress
@@ -148,13 +153,12 @@ class MultipoleDataFetcher:
             if show_progress:
                 print(f"\nError downloading: {e}")
             # Clean up temp file if exists
-            temp_file = destination.with_suffix('.tmp')
+            temp_file = destination.with_suffix(".tmp")
             if temp_file.exists():
                 temp_file.unlink()
             return False
 
-    def _extract_tar(self, tar_path: Path, extract_to: Path,
-                    show_progress: bool = True) -> bool:
+    def _extract_tar(self, tar_path: Path, extract_to: Path, show_progress: bool = True) -> bool:
         """
         Extract tar.gz file.
 
@@ -178,7 +182,7 @@ class MultipoleDataFetcher:
 
             extract_to.mkdir(parents=True, exist_ok=True)
 
-            with tarfile.open(tar_path, 'r:gz') as tar:
+            with tarfile.open(tar_path, "r:gz") as tar:
                 # Extract all files
                 tar.extractall(extract_to)
 
@@ -203,7 +207,7 @@ class MultipoleDataFetcher:
         """
         if self.metadata_file.exists():
             try:
-                with open(self.metadata_file, 'r') as f:
+                with open(self.metadata_file, "r") as f:
                     return json.load(f)
             except (json.JSONDecodeError, IOError):
                 pass
@@ -219,7 +223,7 @@ class MultipoleDataFetcher:
             Metadata to save
         """
         try:
-            with open(self.metadata_file, 'w') as f:
+            with open(self.metadata_file, "w") as f:
                 json.dump(metadata, f, indent=2, default=str)
         except IOError as e:
             print(f"Warning: Could not save metadata: {e}")
@@ -240,15 +244,15 @@ class MultipoleDataFetcher:
         """
         info = {}
         try:
-            request = urllib.request.Request(url, method='HEAD')
+            request = urllib.request.Request(url, method="HEAD")
             with urllib.request.urlopen(request) as response:
                 headers = response.headers
-                if 'Content-Length' in headers:
-                    info['size'] = int(headers['Content-Length'])
-                if 'Last-Modified' in headers:
-                    info['last_modified'] = headers['Last-Modified']
-                if 'ETag' in headers:
-                    info['etag'] = headers['ETag'].strip('"')
+                if "Content-Length" in headers:
+                    info["size"] = int(headers["Content-Length"])
+                if "Last-Modified" in headers:
+                    info["last_modified"] = headers["Last-Modified"]
+                if "ETag" in headers:
+                    info["etag"] = headers["ETag"].strip('"')
         except (URLError, IOError):
             pass
         return info
@@ -275,8 +279,7 @@ class MultipoleDataFetcher:
                 sha256_hash.update(byte_block)
         return sha256_hash.hexdigest() == expected_checksum
 
-    def _verify_multipole_structure(self, base_path: Path,
-                                   show_progress: bool = True) -> bool:
+    def _verify_multipole_structure(self, base_path: Path, show_progress: bool = True) -> bool:
         """
         Verify the expected multipole emulator structure.
 
@@ -300,10 +303,10 @@ class MultipoleDataFetcher:
             True if valid structure found
         """
         # Check for numbered multipole folders (0, 2, 4)
-        multipole_folders = ['0', '2', '4']
+        multipole_folders = ["0", "2", "4"]
 
         # Check for standard component folders
-        component_folders = ['11', 'loop', 'ct']
+        component_folders = ["11", "loop", "ct"]
 
         # Look for multipole structure (0/, 2/, 4/)
         found_multipoles = []
@@ -340,8 +343,7 @@ class MultipoleDataFetcher:
                             print(f"  - {item.name}")
             return False
 
-    def download_and_extract(self, force: bool = False,
-                           show_progress: bool = True) -> bool:
+    def download_and_extract(self, force: bool = False, show_progress: bool = True) -> bool:
         """
         Download and extract emulator data if not already present.
 
@@ -360,8 +362,8 @@ class MultipoleDataFetcher:
         # Check if emulators are already extracted
         if not force and self.emulators_dir.exists():
             # Check for multipole structure
-            multipole_folders = ['0', '2', '4']
-            component_folders = ['11', 'loop', 'ct']
+            multipole_folders = ["0", "2", "4"]
+            component_folders = ["11", "loop", "ct"]
 
             all_multipoles_exist = True
             for mp in multipole_folders:
@@ -386,8 +388,9 @@ class MultipoleDataFetcher:
         if force or not self.tar_path.exists():
             if show_progress:
                 print(f"Downloading from Zenodo...")
-            success = self._download_file(self.zenodo_url, self.tar_path,
-                                         show_progress=show_progress)
+            success = self._download_file(
+                self.zenodo_url, self.tar_path, show_progress=show_progress
+            )
             if not success:
                 return False
 
@@ -415,15 +418,14 @@ class MultipoleDataFetcher:
         if temp_extract.exists():
             shutil.rmtree(temp_extract)
 
-        success = self._extract_tar(self.tar_path, temp_extract,
-                                   show_progress=show_progress)
+        success = self._extract_tar(self.tar_path, temp_extract, show_progress=show_progress)
 
         if success:
             # Find the directory containing multipole folders (0/, 2/, 4/)
             emulator_root = None
 
             # First, check if temp_extract itself has the multipole folders
-            multipole_folders = ['0', '2', '4']
+            multipole_folders = ["0", "2", "4"]
             if any((temp_extract / mp).exists() for mp in multipole_folders):
                 emulator_root = temp_extract
             else:
@@ -458,16 +460,18 @@ class MultipoleDataFetcher:
 
                 # Save metadata about this download
                 metadata = {
-                    'downloaded_at': datetime.now().isoformat(),
-                    'zenodo_url': self.zenodo_url,
-                    'emulator_name': self.emulator_name,
-                    'tar_file_size': self.tar_path.stat().st_size if self.tar_path.exists() else None,
-                    'checksum_verified': self.expected_checksum is not None
+                    "downloaded_at": datetime.now().isoformat(),
+                    "zenodo_url": self.zenodo_url,
+                    "emulator_name": self.emulator_name,
+                    "tar_file_size": self.tar_path.stat().st_size
+                    if self.tar_path.exists()
+                    else None,
+                    "checksum_verified": self.expected_checksum is not None,
                 }
                 # Get remote info if possible
                 remote_info = self._get_remote_info(self.zenodo_url)
                 if remote_info:
-                    metadata['remote_info'] = remote_info
+                    metadata["remote_info"] = remote_info
                 self._save_metadata(metadata)
 
                 return True
@@ -497,7 +501,7 @@ class MultipoleDataFetcher:
         """
         if self.emulators_dir.exists():
             # Check if all multipole folders exist
-            multipole_folders = ['0', '2', '4']
+            multipole_folders = ["0", "2", "4"]
             if all((self.emulators_dir / mp).exists() for mp in multipole_folders):
                 return self.emulators_dir
 
@@ -604,24 +608,24 @@ class MultipoleDataFetcher:
             return False
 
         # Compare with cached info
-        cached_remote = metadata.get('remote_info', {})
+        cached_remote = metadata.get("remote_info", {})
         update_available = False
 
         # Check ETag if available (most reliable)
-        if 'etag' in remote_info and 'etag' in cached_remote:
-            if remote_info['etag'] != cached_remote['etag']:
+        if "etag" in remote_info and "etag" in cached_remote:
+            if remote_info["etag"] != cached_remote["etag"]:
                 update_available = True
                 if show_progress:
                     print("✓ Update available: ETag changed")
         # Check file size
-        elif 'size' in remote_info and 'size' in cached_remote:
-            if remote_info['size'] != cached_remote['size']:
+        elif "size" in remote_info and "size" in cached_remote:
+            if remote_info["size"] != cached_remote["size"]:
                 update_available = True
                 if show_progress:
                     print("✓ Update available: File size changed")
         # Check last modified
-        elif 'last_modified' in remote_info and 'last_modified' in cached_remote:
-            if remote_info['last_modified'] != cached_remote['last_modified']:
+        elif "last_modified" in remote_info and "last_modified" in cached_remote:
+            if remote_info["last_modified"] != cached_remote["last_modified"]:
                 update_available = True
                 if show_progress:
                     print("✓ Update available: Last modified date changed")
@@ -678,24 +682,24 @@ class MultipoleDataFetcher:
             Dictionary with cache information
         """
         info = {
-            'cache_dir': str(self.cache_dir),
-            'emulator_name': self.emulator_name,
-            'has_cached_data': self.emulators_dir.exists()
+            "cache_dir": str(self.cache_dir),
+            "emulator_name": self.emulator_name,
+            "has_cached_data": self.emulators_dir.exists(),
         }
 
         # Add size information
         if self.emulators_dir.exists():
-            total_size = sum(f.stat().st_size for f in self.emulators_dir.rglob('*') if f.is_file())
-            info['extracted_size_mb'] = round(total_size / (1024 * 1024), 2)
+            total_size = sum(f.stat().st_size for f in self.emulators_dir.rglob("*") if f.is_file())
+            info["extracted_size_mb"] = round(total_size / (1024 * 1024), 2)
 
         if self.tar_path.exists():
-            info['tar_size_mb'] = round(self.tar_path.stat().st_size / (1024 * 1024), 2)
+            info["tar_size_mb"] = round(self.tar_path.stat().st_size / (1024 * 1024), 2)
 
         # Add metadata info
         metadata = self._load_metadata()
         if metadata:
-            info['downloaded_at'] = metadata.get('downloaded_at')
-            info['checksum_verified'] = metadata.get('checksum_verified', False)
+            info["downloaded_at"] = metadata.get("downloaded_at")
+            info["checksum_verified"] = metadata.get("checksum_verified", False)
 
         return info
 
@@ -704,10 +708,12 @@ class MultipoleDataFetcher:
 _default_fetcher = None
 
 
-def get_fetcher(zenodo_url: str = None,
-                emulator_name: str = None,
-                cache_dir: Optional[Union[str, Path]] = None,
-                expected_checksum: str = None) -> MultipoleDataFetcher:
+def get_fetcher(
+    zenodo_url: str = None,
+    emulator_name: str = None,
+    cache_dir: Optional[Union[str, Path]] = None,
+    expected_checksum: str = None,
+) -> MultipoleDataFetcher:
     """
     Get the default fetcher instance (singleton pattern).
 
@@ -733,12 +739,14 @@ def get_fetcher(zenodo_url: str = None,
 
     # Use defaults if not specified
     if zenodo_url is None:
-        zenodo_url = "https://zenodo.org/records/17436464/files/trained_effort_pybird_mnuw0wacdm.tar.gz?download=1"
+        zenodo_url = "https://zenodo.org/records/17436464/files/trained_effort_pybird_mnuw0wacdm.tar.xz?download=1"
     if emulator_name is None:
         emulator_name = "pybird_mnuw0wacdm"
 
     if _default_fetcher is None:
-        _default_fetcher = MultipoleDataFetcher(zenodo_url, emulator_name, cache_dir, expected_checksum)
+        _default_fetcher = MultipoleDataFetcher(
+            zenodo_url, emulator_name, cache_dir, expected_checksum
+        )
     return _default_fetcher
 
 
