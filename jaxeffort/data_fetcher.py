@@ -18,6 +18,37 @@ from typing import Any, Dict, Optional, Union
 from urllib.error import URLError
 
 
+def _get_zenodo_url_for_model(model_name: str) -> str:
+    """
+    Get Zenodo URL for a specific model from EMULATOR_CONFIGS.
+
+    Parameters
+    ----------
+    model_name : str
+        Name of the model
+
+    Returns
+    -------
+    str
+        Zenodo URL for the model
+
+    Raises
+    ------
+    ValueError
+        If model not found in EMULATOR_CONFIGS
+    """
+    # Import here to avoid circular dependency
+    from . import EMULATOR_CONFIGS
+
+    if model_name not in EMULATOR_CONFIGS:
+        raise ValueError(
+            f"Model '{model_name}' not found in EMULATOR_CONFIGS. "
+            f"Available models: {list(EMULATOR_CONFIGS.keys())}"
+        )
+
+    return EMULATOR_CONFIGS[model_name]["zenodo_url"]
+
+
 class MultipoleDataFetcher:
     """
     Manages downloading and caching of multipole emulator data from Zenodo.
@@ -702,7 +733,7 @@ def get_fetcher(zenodo_url: str = None,
 
     # Use defaults if not specified
     if zenodo_url is None:
-        zenodo_url = "https://zenodo.org/records/17172502/files/trained_effort_pybird_mnuw0wacdm.tar.gz?download=1"
+        zenodo_url = "https://zenodo.org/records/17436464/files/trained_effort_pybird_mnuw0wacdm.tar.gz?download=1"
     if emulator_name is None:
         emulator_name = "pybird_mnuw0wacdm"
 
@@ -758,7 +789,7 @@ def clear_cache(model_name: str = None, clear_tar: bool = True, show_progress: b
     """
     if model_name:
         # Clear specific model
-        zenodo_url = f"https://zenodo.org/records/17138475/files/trained_effort_{model_name}.tar.gz?download=1"
+        zenodo_url = _get_zenodo_url_for_model(model_name)
         fetcher = MultipoleDataFetcher(zenodo_url, model_name)
     else:
         fetcher = get_fetcher()
@@ -790,7 +821,7 @@ def check_for_updates(model_name: str = None, show_progress: bool = True) -> boo
     ...     jaxeffort.force_update()
     """
     if model_name:
-        zenodo_url = f"https://zenodo.org/records/17138475/files/trained_effort_{model_name}.tar.gz?download=1"
+        zenodo_url = _get_zenodo_url_for_model(model_name)
         fetcher = MultipoleDataFetcher(zenodo_url, model_name)
     else:
         fetcher = get_fetcher()
@@ -830,7 +861,7 @@ def force_update(model_name: str = None, show_progress: bool = True) -> bool:
     >>> jaxeffort.force_update("pybird_mnuw0wacdm")
     """
     if model_name:
-        zenodo_url = f"https://zenodo.org/records/17138475/files/trained_effort_{model_name}.tar.gz?download=1"
+        zenodo_url = _get_zenodo_url_for_model(model_name)
         fetcher = MultipoleDataFetcher(zenodo_url, model_name)
     else:
         fetcher = get_fetcher()
@@ -867,7 +898,7 @@ def get_cache_info(model_name: str = None) -> Dict[str, Any]:
     >>> print(f"Downloaded at: {info['downloaded_at']}")
     """
     if model_name:
-        zenodo_url = f"https://zenodo.org/records/17138475/files/trained_effort_{model_name}.tar.gz?download=1"
+        zenodo_url = _get_zenodo_url_for_model(model_name)
         fetcher = MultipoleDataFetcher(zenodo_url, model_name)
     else:
         fetcher = get_fetcher()

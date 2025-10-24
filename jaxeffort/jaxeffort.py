@@ -130,20 +130,29 @@ class MLP:
 
 
 class MultipoleEmulators:
-    def __init__(self, P11: MLP, Ploop: MLP, Pct: MLP, bias_contraction: callable):
+    def __init__(self, P11: MLP, Ploop: MLP, Pct: MLP, bias_combination: callable,
+                 stoch_model: callable, jacobian_bias_combination: callable = None):
         """
-        Initializes the MultipoleEmulators class with three MLP instances and bias contraction.
+        Initializes the MultipoleEmulators class with three MLP instances, bias combination,
+        and stochastic model.
 
         Args:
             P11 (MLP): MLP instance for P11 emulator.
             Ploop (MLP): MLP instance for Ploop emulator.
             Pct (MLP): MLP instance for Pct emulator.
-            bias_contraction (callable): Bias contraction function for the multipole.
+            bias_combination (callable): Bias combination function for the multipole.
+                Maps bias parameters to linear combination coefficients.
+            stoch_model (callable): Stochastic model function that takes k-grid and returns
+                stochastic component arrays.
+            jacobian_bias_combination (callable, optional): Analytical Jacobian of bias combination
+                                                           with respect to bias parameters.
         """
         self.P11 = P11
         self.Ploop = Ploop
         self.Pct = Pct
-        self.bias_contraction = bias_contraction
+        self.bias_combination = bias_combination
+        self.stoch_model = stoch_model
+        self.jacobian_bias_combination = jacobian_bias_combination
 
     @partial(jax.jit, static_argnums=(0,))
     def get_multipole_components(self, inputs: np.array, D) -> Tuple[np.array, np.array, np.array]:
@@ -167,48 +176,113 @@ class MultipoleEmulators:
 
     def get_Pl(self, cosmology, biases, D):
         """
-        Get P_ℓ using the multipole's bias contraction function.
-        Matches Effort.jl where BiasContraction is at PℓEmulator level only.
+        Get P_ℓ using the multipole's bias combination function.
+        Matches Effort.jl where BiasCombination is at PℓEmulator level only.
 
         This method uses JIT compilation for performance.
+        Includes stochastic components via StochModel.
         """
-        if self.bias_contraction is None:
-            raise ValueError("biascontraction is required to compute P_ℓ with biases")
+        if self.bias_combination is None:
+            raise ValueError("bias_combination is required to compute P_ℓ with biases")
 
         # Create JIT-compiled version on first call
         if not hasattr(self, '_jit_get_Pl'):
             @partial(jax.jit, static_argnums=(0,))
             def _jit_get_Pl(self, cosmology, biases, D):
                 P11_comp, Ploop_comp, Pct_comp = self.get_multipole_components(cosmology, D)
-                stacked_array = jnp.hstack((P11_comp, Ploop_comp, Pct_comp))
-                return self.bias_contraction(biases, stacked_array)
+                # Add stochastic components - StochModel takes k-grid as input
+                stoch_comp = self.stoch_model(self.P11.k_grid)
+                stacked_array = jnp.hstack((P11_comp, Ploop_comp, Pct_comp, stoch_comp))
+                # BiasCombination returns coefficient vector
+                biases_vec = self.bias_combination(biases)
+                # Compute P_ℓ = stacked_array @ biases_vec
+                return stacked_array @ biases_vec
             self._jit_get_Pl = _jit_get_Pl
 
         return self._jit_get_Pl(self, cosmology, biases, D)
 
     def get_Pl_no_bias(self, cosmology, D):
-        """Get raw components without bias contraction."""
+        """Get raw components without bias combination."""
         P11_output, Ploop_output, Pct_output = self.get_multipole_components(cosmology, D)
         return jnp.hstack((P11_output, Ploop_output, Pct_output))
 
+    def get_Pl_jacobian(self, cosmology, biases, D):
+        """
+        Compute both the power spectrum multipole P_ℓ and its Jacobian with respect to
+        bias parameters.
+
+        This function is optimized for inference workflows where both the power spectrum
+        and its derivatives are needed (e.g., gradient-based MCMC, Fisher forecasts).
+        It computes both quantities in a single pass, avoiding redundant neural network
+        evaluations.
+
+        The Jacobian is computed using the analytical derivative of the bias combination
+        function, which is significantly faster than automatic differentiation.
+
+        Args:
+            cosmology: Array of cosmological parameters.
+            biases: Array of bias parameters.
+            D: Growth factor value.
+
+        Returns:
+            Tuple[jnp.ndarray, jnp.ndarray]: (P_ℓ, ∂P_ℓ/∂b) where:
+                - P_ℓ: Power spectrum multipole values
+                - ∂P_ℓ/∂b: Jacobian matrix with respect to bias parameters
+
+        Raises:
+            ValueError: If jacobian_bias_combination was not provided during initialization.
+        """
+        if self.jacobian_bias_combination is None:
+            raise ValueError(
+                "jacobian_bias_combination is required to compute Jacobian. "
+                "The emulator was loaded without the jacbiascombination.py file. "
+                "Please ensure the file exists in the emulator directory."
+            )
+
+        # Create JIT-compiled version on first call
+        if not hasattr(self, '_jit_get_Pl_jacobian'):
+            @partial(jax.jit, static_argnums=(0,))
+            def _jit_get_Pl_jacobian(self, cosmology, biases, D):
+                # Get all components (single NN evaluation)
+                P11_comp, Ploop_comp, Pct_comp = self.get_multipole_components(cosmology, D)
+                # Add stochastic components
+                stoch_comp = self.stoch_model(self.P11.k_grid)
+                stacked_array = jnp.hstack((P11_comp, Ploop_comp, Pct_comp, stoch_comp))
+
+                # Compute bias combination and its Jacobian
+                # BiasCombination returns coefficient vector (no stacked_array arg)
+                biases_vec = self.bias_combination(biases)
+                jac_biases = self.jacobian_bias_combination(biases)
+
+                # Pl = stacked_array @ biases_vec
+                # ∂Pl/∂b = stacked_array @ jac_biases
+                Pl = stacked_array @ biases_vec
+                Pl_jac = stacked_array @ jac_biases
+
+                return Pl, Pl_jac
+
+            self._jit_get_Pl_jacobian = _jit_get_Pl_jacobian
+
+        return self._jit_get_Pl_jacobian(self, cosmology, biases, D)
+
 
 class MultipoleNoiseEmulator:
-    def __init__(self, multipole_emulator: MultipoleEmulators, noise_emulator: MLP, bias_contraction: callable):
+    def __init__(self, multipole_emulator: MultipoleEmulators, noise_emulator: MLP, bias_combination: callable):
         """
         Initializes the MultipoleNoiseEmulator with a multipole emulator and a noise emulator.
 
         Args:
             multipole_emulator (MultipoleEmulators): An instance of the MultipoleEmulators class.
             noise_emulator (MLP): An instance of the MLP class representing the noise emulator.
-            bias_contraction (callable): Overall bias contraction function.
+            bias_combination (callable): Overall bias combination function.
         """
         self.multipole_emulator = multipole_emulator
         self.noise_emulator = noise_emulator
-        self.bias_contraction = bias_contraction
+        self.bias_combination = bias_combination
 
     def get_Pl(self, cosmology, biases, D):
         """
-        Get P_ℓ with noise, using bias contraction.
+        Get P_ℓ with noise, using bias combination.
 
         This method uses JIT compilation for performance.
         """
@@ -220,14 +294,14 @@ class MultipoleNoiseEmulator:
                 P11_comp, Ploop_comp, Pct_comp = self.multipole_emulator.get_multipole_components(cosmology, D)
                 Noise_comp = self.noise_emulator.get_component(cosmology, D)
                 stacked_array = jnp.hstack((P11_comp, Ploop_comp, Pct_comp, Noise_comp))
-                # Use the overall bias contraction
-                return self.bias_contraction(biases, stacked_array)
+                # Use the overall bias combination
+                return self.bias_combination(biases, stacked_array)
             self._jit_get_Pl = _jit_get_Pl
 
         return self._jit_get_Pl(self, cosmology, biases, D)
 
     def get_Pl_no_bias(self, cosmology, D):
-        """Get raw components without bias contraction."""
+        """Get raw components without bias combination."""
         P11_output, Ploop_output, Pct_output = self.multipole_emulator.get_multipole_components(cosmology, D)
         Noise_output = self.noise_emulator.get_component(cosmology, D)
         return jnp.hstack((P11_output, Ploop_output, Pct_output, Noise_output))
@@ -241,27 +315,117 @@ def load_preprocessing(root_path, filename):
     return test.postprocessing
 
 
-def load_bias_contraction(root_path, filename="biascontraction", required=True):
-    """Load bias contraction function from Python file."""
+def load_bias_combination(root_path, filename="biascombination", required=True):
+    """
+    Load bias combination function from Python file.
+
+    This function loads the bias combination (previously called bias contraction)
+    which maps bias parameters to the linear combination coefficients for the
+    power spectrum components.
+
+    Args:
+        root_path (str): Root path where the file is located.
+        filename (str): Filename without extension. Default: "biascombination".
+        required (bool): Whether to raise an error if file is not found.
+
+    Returns:
+        callable: The bias combination function.
+    """
     filepath = root_path + "/" + filename + ".py"
     import os
     if not os.path.exists(filepath):
         if required:
-            raise FileNotFoundError(f"Bias contraction file not found: {filepath}")
+            raise FileNotFoundError(f"Bias combination file not found: {filepath}")
         return None
 
     spec = importlib.util.spec_from_file_location(filename, filepath)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
-    # Try to get BiasContraction function (capital B) or biascontraction (lowercase)
-    if hasattr(module, 'BiasContraction'):
+    # Try to get BiasCombination (matching Effort.jl) or BiasContraction (legacy)
+    if hasattr(module, 'BiasCombination'):
+        return module.BiasCombination
+    elif hasattr(module, 'BiasContraction'):
         return module.BiasContraction
     elif hasattr(module, 'biascontraction'):
         return module.biascontraction
     else:
         if required:
-            raise AttributeError(f"No BiasContraction or biascontraction function found in {filepath}")
+            raise AttributeError(f"No BiasCombination or BiasContraction function found in {filepath}")
+        return None
+
+
+def load_jacobian_bias_combination(root_path, filename="jacbiascombination", required=False):
+    """
+    Load Jacobian bias combination function from Python file.
+
+    This function returns the analytical Jacobian of the bias combination with respect
+    to bias parameters, which is significantly faster than automatic differentiation.
+
+    Args:
+        root_path (str): Root path where the file is located.
+        filename (str): Filename without extension. Default: "jacbiascombination".
+        required (bool): Whether to raise an error if file is not found. Default: False.
+
+    Returns:
+        callable or None: The Jacobian bias combination function, or None if not found
+                         and not required.
+    """
+    filepath = root_path + "/" + filename + ".py"
+    import os
+    if not os.path.exists(filepath):
+        if required:
+            raise FileNotFoundError(f"Jacobian bias combination file not found: {filepath}")
+        return None
+
+    spec = importlib.util.spec_from_file_location(filename, filepath)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    # Match Effort.jl naming: JacobianBiasCombination
+    if hasattr(module, 'JacobianBiasCombination'):
+        return module.JacobianBiasCombination
+    else:
+        if required:
+            raise AttributeError(f"No JacobianBiasCombination function found in {filepath}")
+        return None
+
+
+def load_stoch_model(root_path, filename="stochmodel", required=True):
+    """
+    Load stochastic model function from Python file.
+
+    The stochastic model computes the stochastic contributions to the power spectrum
+    (e.g., shot noise terms). It takes the k-grid as input and returns stochastic
+    component arrays.
+
+    Args:
+        root_path (str): Root path where the file is located.
+        filename (str): Filename without extension. Default: "stochmodel".
+        required (bool): Whether to raise an error if file is not found. Default: True.
+
+    Returns:
+        callable: The stochastic model function.
+    """
+    filepath = root_path + "/" + filename + ".py"
+    import os
+    if not os.path.exists(filepath):
+        if required:
+            raise FileNotFoundError(f"Stochastic model file not found: {filepath}")
+        return None
+
+    spec = importlib.util.spec_from_file_location(filename, filepath)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    # Match Effort.jl naming: StochModel
+    if hasattr(module, 'StochModel'):
+        return module.StochModel
+    elif hasattr(module, 'stoch_model'):
+        return module.stoch_model
+    else:
+        if required:
+            raise AttributeError(f"No StochModel function found in {filepath}")
         return None
 
 
@@ -310,7 +474,7 @@ def load_component_emulator(folder_path):
 def load_multipole_emulator(folder_path: str) -> MultipoleEmulators:
     """
     Loads the three multipole emulators (P11, Ploop, Pct) from their respective subfolders.
-    Bias contraction is loaded at the multipole level, matching Effort.jl structure.
+    Bias combination is loaded at the multipole level, matching Effort.jl structure.
 
     Args:
         folder_path (str): The path to the folder containing the subfolders `11`, `loop`, and `ct`.
@@ -326,16 +490,23 @@ def load_multipole_emulator(folder_path: str) -> MultipoleEmulators:
     Ploop_path = folder_path / "loop"
     Pct_path = folder_path / "ct"
 
-    # Load each component emulator (no bias contraction at component level)
+    # Load each component emulator (no bias combination at component level)
     P11_emulator = load_component_emulator(P11_path)
     Ploop_emulator = load_component_emulator(Ploop_path)
     Pct_emulator = load_component_emulator(Pct_path)
 
-    # Load multipole-level bias contraction - this is required (matches Effort.jl PℓEmulator)
-    multipole_bias_contraction = load_bias_contraction(str(folder_path), required=True)
+    # Load multipole-level bias combination - this is required (matches Effort.jl PℓEmulator)
+    multipole_bias_combination = load_bias_combination(str(folder_path), required=True)
 
-    # Return the MultipoleEmulators instance with bias contraction
-    return MultipoleEmulators(P11_emulator, Ploop_emulator, Pct_emulator, multipole_bias_contraction)
+    # Load stochastic model - this is required (matches Effort.jl StochModel)
+    stoch_model = load_stoch_model(str(folder_path), required=True)
+
+    # Load Jacobian bias combination - this is optional (matches Effort.jl JacobianBiasCombination)
+    jacobian_bias_combination = load_jacobian_bias_combination(str(folder_path), required=False)
+
+    # Return the MultipoleEmulators instance with bias combination, stoch model, and optional Jacobian
+    return MultipoleEmulators(P11_emulator, Ploop_emulator, Pct_emulator,
+                             multipole_bias_combination, stoch_model, jacobian_bias_combination)
 
 
 def get_stoch_terms(cϵ0, cϵ1, cϵ2, n_bar, k_grid, k_nl=0.7):
@@ -383,23 +554,23 @@ def load_multipole_noise_emulator(folder_path: str) -> MultipoleNoiseEmulator:
     Pct_path = folder_path / "ct"
     noise_path = folder_path / "st"
 
-    # Load component emulators (no bias contraction at component level)
+    # Load component emulators (no bias combination at component level)
     P11_emulator = load_component_emulator(P11_path)
     Ploop_emulator = load_component_emulator(Ploop_path)
     Pct_emulator = load_component_emulator(Pct_path)
     noise_emulator = load_component_emulator(noise_path)
 
-    # For MultipoleNoiseEmulator, we need a bias contraction at the top level
+    # For MultipoleNoiseEmulator, we need a bias combination at the top level
     # This handles all components including noise
-    overall_bias_contraction = load_bias_contraction(str(folder_path), required=True)
+    overall_bias_combination = load_bias_combination(str(folder_path), required=True)
 
-    # Create multipole emulator with a placeholder bias contraction
-    # (The actual contraction happens at the MultipoleNoiseEmulator level)
-    def placeholder_contraction(biases, stacked_array):
-        # This is never called - MultipoleNoiseEmulator uses its own bias_contraction
+    # Create multipole emulator with a placeholder bias combination
+    # (The actual combination happens at the MultipoleNoiseEmulator level)
+    def placeholder_combination(biases, stacked_array):
+        # This is never called - MultipoleNoiseEmulator uses its own bias_combination
         raise NotImplementedError("This should not be called")
 
-    multipole_emulator = MultipoleEmulators(P11_emulator, Ploop_emulator, Pct_emulator, placeholder_contraction)
+    multipole_emulator = MultipoleEmulators(P11_emulator, Ploop_emulator, Pct_emulator, placeholder_combination)
 
-    # Return the MultipoleNoiseEmulator instance with bias contraction
-    return MultipoleNoiseEmulator(multipole_emulator, noise_emulator, overall_bias_contraction)
+    # Return the MultipoleNoiseEmulator instance with bias combination
+    return MultipoleNoiseEmulator(multipole_emulator, noise_emulator, overall_bias_combination)
