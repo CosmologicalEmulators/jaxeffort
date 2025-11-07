@@ -67,6 +67,16 @@ EMULATOR_CONFIGS = {
         "zenodo_url": "https://zenodo.org/records/17436464/files/trained_effort_pybird_mnuw0wacdm.tar.xz?download=1",
         "description": "PyBird emulator for massive neutrinos, w0wa CDM cosmology",
         "has_noise": False,  # Set to True if the emulator includes noise (st/) component
+    },
+    "velocileptors_lpt_mnuw0wacdm": {
+        "zenodo_url": "https://zenodo.org/records/17555242/files/trained_effort_velocileptors_lpt_mnuw0wacdm.tar.xz?download=1",
+        "description": "Velocileptors LPT emulator for massive neutrinos, w0wa CDM cosmology",
+        "has_noise": False,  # Set to True if the emulator includes noise (st/) component
+    },
+    "velocileptors_rept_mnuw0wacdm": {
+        "zenodo_url": "https://zenodo.org/records/17555286/files/trained_effort_velocileptors_rept_mnuw0wacdm.tar.xz?download=1",
+        "description": "Velocileptors REPT emulator for massive neutrinos, w0wa CDM cosmology",
+        "has_noise": False,  # Set to True if the emulator includes noise (st/) component
     }
     # Future models can be added here:
     # "camb_lcdm": {
@@ -154,7 +164,8 @@ def _load_emulator_set(model_name: str, config: dict, auto_download: bool = True
 
     try:
         # Initialize fetcher for this model
-        fetcher = get_fetcher(
+        # Create a NEW fetcher instance for each model (don't use singleton get_fetcher)
+        fetcher = MultipoleDataFetcher(
             zenodo_url=config["zenodo_url"],
             emulator_name=model_name,
             expected_checksum=config.get("checksum"),

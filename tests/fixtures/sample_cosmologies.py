@@ -41,6 +41,12 @@ def get_test_biases():
     return jnp.array([2.0, 0.5, -0.4, 0.1, 0.05, 0.02, 0.01, 0.8, 1.0, 0.5, 0.2])
 
 
+def get_test_biases_velocileptors():
+    """Get standard galaxy bias parameters for Velocileptors (LPT and REPT)."""
+    # Velocileptors bias parameters: [b1, b2, b3, bs, alpha0, alpha2, alpha4, alpha6, sn, sn2, sn4]
+    return jnp.array([2.0, -1.0, 0.5, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
+
+
 def get_test_redshifts():
     """Get standard redshift array for testing."""
     return jnp.array([0.0, 0.5, 1.0, 1.5, 2.0])
