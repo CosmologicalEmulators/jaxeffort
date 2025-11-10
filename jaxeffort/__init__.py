@@ -56,6 +56,7 @@ from .data_fetcher import (
     force_update,
     get_cache_info,
     clear_all_cache,
+    clean_cached_emulators,
 )
 
 # Initialize the trained_emulators dictionary BEFORE __all__
@@ -67,16 +68,19 @@ EMULATOR_CONFIGS = {
         "zenodo_url": "https://zenodo.org/records/17436464/files/trained_effort_pybird_mnuw0wacdm.tar.xz?download=1",
         "description": "PyBird emulator for massive neutrinos, w0wa CDM cosmology",
         "has_noise": False,  # Set to True if the emulator includes noise (st/) component
+        "checksum": "d309b571f5693718c8612d387820a409479fe50688d4c46c87ba8662c6acc09b",  # SHA256 checksum
     },
     "velocileptors_lpt_mnuw0wacdm": {
-        "zenodo_url": "https://zenodo.org/records/17555242/files/trained_effort_velocileptors_lpt_mnuw0wacdm.tar.xz?download=1",
+        "zenodo_url": "https://zenodo.org/records/17571778/files/trained_effort_velocileptors_lpt_mnuw0wacdm.tar.xz?download=1",
         "description": "Velocileptors LPT emulator for massive neutrinos, w0wa CDM cosmology",
         "has_noise": False,  # Set to True if the emulator includes noise (st/) component
+        "checksum": "e40dac03eb98d17a8a913b7e784a4237906fd575844655d885ec64312b3b98bc",  # SHA256 checksum
     },
     "velocileptors_rept_mnuw0wacdm": {
-        "zenodo_url": "https://zenodo.org/records/17555286/files/trained_effort_velocileptors_rept_mnuw0wacdm.tar.xz?download=1",
+        "zenodo_url": "https://zenodo.org/records/17566981/files/trained_effort_velocileptors_rept_mnuw0wacdm.tar.xz?download=1",
         "description": "Velocileptors REPT emulator for massive neutrinos, w0wa CDM cosmology",
         "has_noise": False,  # Set to True if the emulator includes noise (st/) component
+        "checksum": "8c275574073bbf80a5f78afdb250b59d85a99b957cf531ea74e2590639cbd7ff",  # SHA256 checksum
     }
     # Future models can be added here:
     # "camb_lcdm": {
@@ -107,6 +111,7 @@ __all__ = [
     "force_update",
     "get_cache_info",
     "clear_all_cache",
+    "clean_cached_emulators",
     # Trained emulators dictionary
     "trained_emulators",
     "EMULATOR_CONFIGS",

@@ -943,3 +943,64 @@ def clear_all_cache(show_progress: bool = True):
     else:
         if show_progress:
             print("No cached data to clear")
+
+
+def clean_cached_emulators(
+    model_names: Union[str, list, None] = None,
+    clear_tar: bool = True,
+    show_progress: bool = True
+):
+    """
+    Clean cached emulator files for specific models or all models.
+
+    This is a convenience function that provides an intuitive interface for
+    cleaning cached emulators. It can clean specific models or all cached data.
+
+    Parameters
+    ----------
+    model_names : str, list of str, or None
+        Model name(s) to clean. Options:
+        - None: Clean ALL cached emulators (entire cache)
+        - "all": Clean ALL cached emulators (entire cache)
+        - str: Clean specific model (e.g., "pybird_mnuw0wacdm")
+        - list: Clean multiple specific models
+    clear_tar : bool, default=True
+        Whether to also remove downloaded tar.xz files
+    show_progress : bool, default=True
+        Whether to show progress messages
+
+    Examples
+    --------
+    >>> import jaxeffort
+    >>>
+    >>> # Clean all cached emulators
+    >>> jaxeffort.clean_cached_emulators()
+    >>>
+    >>> # Clean specific model
+    >>> jaxeffort.clean_cached_emulators("velocileptors_rept_mnuw0wacdm")
+    >>>
+    >>> # Clean multiple models
+    >>> jaxeffort.clean_cached_emulators(["pybird_mnuw0wacdm", "velocileptors_lpt_mnuw0wacdm"])
+    >>>
+    >>> # Clean but keep tar files for faster re-extraction
+    >>> jaxeffort.clean_cached_emulators(clear_tar=False)
+    """
+    # Handle "all" or None -> clear everything
+    if model_names is None or model_names == "all":
+        clear_all_cache(show_progress=show_progress)
+        return
+
+    # Convert single model name to list
+    if isinstance(model_names, str):
+        model_names = [model_names]
+
+    # Clean each specified model
+    for model_name in model_names:
+        if show_progress:
+            print(f"Cleaning cache for: {model_name}")
+
+        try:
+            clear_cache(model_name=model_name, clear_tar=clear_tar, show_progress=show_progress)
+        except Exception as e:
+            if show_progress:
+                print(f"Warning: Could not clean {model_name}: {e}")
