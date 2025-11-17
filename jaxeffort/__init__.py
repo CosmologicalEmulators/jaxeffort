@@ -77,10 +77,10 @@ EMULATOR_CONFIGS = {
         "checksum": "e40dac03eb98d17a8a913b7e784a4237906fd575844655d885ec64312b3b98bc",  # SHA256 checksum
     },
     "velocileptors_rept_mnuw0wacdm": {
-        "zenodo_url": "https://zenodo.org/records/17566981/files/trained_effort_velocileptors_rept_mnuw0wacdm.tar.xz?download=1",
+        "zenodo_url": "https://zenodo.org/records/17635853/files/trained_effort_velocileptors_rept_mnuw0wacdm.tar.xz?download=1",
         "description": "Velocileptors REPT emulator for massive neutrinos, w0wa CDM cosmology",
         "has_noise": False,  # Set to True if the emulator includes noise (st/) component
-        "checksum": "8c275574073bbf80a5f78afdb250b59d85a99b957cf531ea74e2590639cbd7ff",  # SHA256 checksum
+        "checksum": "33dfa33b1191928198d17f263bae77621d8f46cff25281812cbc2cdddff092d9",  # SHA256 checksum
     }
     # Future models can be added here:
     # "camb_lcdm": {
