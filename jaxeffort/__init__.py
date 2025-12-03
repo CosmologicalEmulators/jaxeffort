@@ -3,11 +3,14 @@ jaxeffort: JAX-based Effective Field Theory for Galaxy Power Spectrum
 
 This package provides tools for emulating galaxy power spectra using JAX,
 with automatic downloading and caching of pretrained multipole emulators.
+
+Emulator configurations are defined in Artifacts.toml (similar to Julia's Pkg.Artifacts).
 """
 
 import os
 import warnings
 from pathlib import Path
+from typing import Dict, List, Optional, Any
 
 # Import core functionality explicitly (not using *)
 from jaxeffort.jaxeffort import (
@@ -20,7 +23,7 @@ from jaxeffort.jaxeffort import (
     load_preprocessing,
     load_stoch_model,
     # Cosmology functions from jaxace (re-exported for convenience)
-    W0WaCDMCosmology,
+    w0waCDMCosmology,
     a_z,
     E_a,
     E_z,
@@ -46,49 +49,84 @@ from jaxeffort.jaxeffort import (
     inv_maximin,
 )
 
-# Import data fetcher functionality
-from .data_fetcher import (
-    get_emulator_path,
-    get_fetcher,
-    MultipoleDataFetcher,
-    clear_cache,
-    check_for_updates,
-    force_update,
-    get_cache_info,
-    clear_all_cache,
-    clean_cached_emulators,
+# Import fetch_artifacts for artifact management
+from fetch_artifacts import (
+    load_artifacts,
+    artifact,
+    artifact_exists,
+    clear_artifact_cache,
+    get_cache_dir,
+    set_cache_dir,
+    bind_artifact,
+    add_artifact,
 )
 
-# Initialize the trained_emulators dictionary BEFORE __all__
-trained_emulators = {}
+# Initialize the trained_emulators dictionary
+trained_emulators: Dict[str, Dict[str, Optional[MultipoleEmulators]]] = {}
 
-# Define available emulator configurations BEFORE __all__
-EMULATOR_CONFIGS = {
-    "pybird_mnuw0wacdm": {
-        "zenodo_url": "https://zenodo.org/records/17436464/files/trained_effort_pybird_mnuw0wacdm.tar.xz?download=1",
-        "description": "PyBird emulator for massive neutrinos, w0wa CDM cosmology",
-        "has_noise": False,  # Set to True if the emulator includes noise (st/) component
-        "checksum": "d309b571f5693718c8612d387820a409479fe50688d4c46c87ba8662c6acc09b",  # SHA256 checksum
-    },
-    "velocileptors_lpt_mnuw0wacdm": {
-        "zenodo_url": "https://zenodo.org/records/17571778/files/trained_effort_velocileptors_lpt_mnuw0wacdm.tar.xz?download=1",
-        "description": "Velocileptors LPT emulator for massive neutrinos, w0wa CDM cosmology",
-        "has_noise": False,  # Set to True if the emulator includes noise (st/) component
-        "checksum": "e40dac03eb98d17a8a913b7e784a4237906fd575844655d885ec64312b3b98bc",  # SHA256 checksum
-    },
-    "velocileptors_rept_mnuw0wacdm": {
-        "zenodo_url": "https://zenodo.org/records/17566981/files/trained_effort_velocileptors_rept_mnuw0wacdm.tar.xz?download=1",
-        "description": "Velocileptors REPT emulator for massive neutrinos, w0wa CDM cosmology",
-        "has_noise": False,  # Set to True if the emulator includes noise (st/) component
-        "checksum": "8c275574073bbf80a5f78afdb250b59d85a99b957cf531ea74e2590639cbd7ff",  # SHA256 checksum
+# Path to Artifacts.toml (in package directory)
+_ARTIFACTS_TOML = Path(__file__).parent.parent / "Artifacts.toml"
+
+# Global artifact manager
+_artifact_manager = None
+
+
+def _get_artifact_manager():
+    """Get or create the artifact manager singleton."""
+    global _artifact_manager
+    if _artifact_manager is None:
+        if _ARTIFACTS_TOML.exists():
+            _artifact_manager = load_artifacts(_ARTIFACTS_TOML)
+        else:
+            warnings.warn(f"Artifacts.toml not found at {_ARTIFACTS_TOML}")
+    return _artifact_manager
+
+
+def list_emulators() -> List[str]:
+    """
+    List all available emulators defined in Artifacts.toml.
+
+    Returns
+    -------
+    list of str
+        Names of available emulators.
+    """
+    manager = _get_artifact_manager()
+    if manager is None:
+        return []
+    return list(manager.artifacts.keys())
+
+
+def get_emulator_info(model_name: str) -> Dict[str, Any]:
+    """
+    Get information about an emulator from Artifacts.toml.
+
+    Parameters
+    ----------
+    model_name : str
+        Name of the emulator.
+
+    Returns
+    -------
+    dict
+        Emulator information including description, has_noise, etc.
+    """
+    manager = _get_artifact_manager()
+    if manager is None:
+        raise RuntimeError("Artifacts.toml not found")
+
+    if model_name not in manager:
+        raise ValueError(f"Model '{model_name}' not found. Available: {list_emulators()}")
+
+    entry = manager.artifacts[model_name]
+    return {
+        "name": model_name,
+        "git_tree_sha1": entry.git_tree_sha1,
+        "lazy": entry.lazy,
+        "cached": manager.exists(model_name),
+        **entry.metadata,  # Includes description, has_noise, etc.
     }
-    # Future models can be added here:
-    # "camb_lcdm": {
-    #     "zenodo_url": "https://zenodo.org/...",
-    #     "description": "CAMB-based LCDM model",
-    #     "has_noise": True,
-    # }
-}
+
 
 __all__ = [
     # Core emulator classes
@@ -101,24 +139,19 @@ __all__ = [
     "load_jacobian_bias_combination",
     "load_preprocessing",
     "load_stoch_model",
-    # Data fetcher
+    # Artifact management
     "get_emulator_path",
-    "get_fetcher",
-    "MultipoleDataFetcher",
-    # Cache management
+    "list_emulators",
+    "get_emulator_info",
     "clear_cache",
-    "check_for_updates",
-    "force_update",
     "get_cache_info",
     "clear_all_cache",
-    "clean_cached_emulators",
+    "add_emulator",
     # Trained emulators dictionary
     "trained_emulators",
-    "EMULATOR_CONFIGS",
-    "add_emulator_config",
     "reload_emulators",
     # Cosmology functions (from jaxace)
-    "W0WaCDMCosmology",
+    "w0waCDMCosmology",
     "a_z",
     "E_a",
     "E_z",
@@ -144,19 +177,100 @@ __all__ = [
     "inv_maximin",
 ]
 
-__version__ = "0.2.2"
+__version__ = "0.3.0"
 
 
-def _load_emulator_set(model_name: str, config: dict, auto_download: bool = True):
+def get_emulator_path(model_name: str = None, download_if_missing: bool = True) -> Path:
     """
-    Helper function to load a set of multipole emulators for a given model.
+    Get the path to an emulator's data directory.
+
+    Parameters
+    ----------
+    model_name : str, optional
+        Name of the model. If None, returns path for default model.
+    download_if_missing : bool
+        Whether to download if not cached. Default: True.
+
+    Returns
+    -------
+    Path
+        Path to the emulator directory.
+    """
+    if model_name is None:
+        model_name = "pybird_mnuw0wacdm"
+
+    manager = _get_artifact_manager()
+    if manager is None:
+        raise RuntimeError("Artifact manager not initialized. Artifacts.toml not found.")
+
+    if model_name not in manager:
+        raise ValueError(
+            f"Model '{model_name}' not found. Available: {list_emulators()}"
+        )
+
+    return manager.get_path(model_name)
+
+
+def clear_cache(model_name: str = None):
+    """
+    Clear cached emulator files.
+
+    Parameters
+    ----------
+    model_name : str, optional
+        Specific model to clear. If None, clears all.
+    """
+    manager = _get_artifact_manager()
+    if manager is None:
+        return
+
+    if model_name:
+        manager.clear(model_name)
+    else:
+        manager.clear()
+
+
+def clear_all_cache():
+    """Clear ALL cached jaxeffort data."""
+    clear_cache()
+
+
+def get_cache_info(model_name: str = None) -> dict:
+    """
+    Get information about cached emulator files.
+
+    Parameters
+    ----------
+    model_name : str, optional
+        Specific model to get info for.
+
+    Returns
+    -------
+    dict
+        Cache information.
+    """
+    manager = _get_artifact_manager()
+    if manager is None:
+        return {"error": "Artifact manager not initialized"}
+
+    if model_name is None:
+        model_name = "pybird_mnuw0wacdm"
+
+    return {
+        "cache_dir": str(get_cache_dir()),
+        "emulator_name": model_name,
+        "has_cached_data": manager.exists(model_name),
+    }
+
+
+def _load_emulator_set(model_name: str, auto_download: bool = True):
+    """
+    Load a set of multipole emulators for a given model.
 
     Parameters
     ----------
     model_name : str
         Name of the model (e.g., "pybird_mnuw0wacdm")
-    config : dict
-        Configuration dictionary with zenodo_url and other settings
     auto_download : bool
         Whether to automatically download if not cached
 
@@ -168,23 +282,24 @@ def _load_emulator_set(model_name: str, config: dict, auto_download: bool = True
     emulators = {}
 
     try:
-        # Initialize fetcher for this model
-        # Create a NEW fetcher instance for each model (don't use singleton get_fetcher)
-        fetcher = MultipoleDataFetcher(
-            zenodo_url=config["zenodo_url"],
-            emulator_name=model_name,
-            expected_checksum=config.get("checksum"),
-        )
+        manager = _get_artifact_manager()
+        if manager is None or model_name not in manager:
+            warnings.warn(f"Model '{model_name}' not found in Artifacts.toml")
+            return {"0": None, "2": None, "4": None}
 
-        # Get multipole paths
-        multipole_paths = fetcher.get_multipole_paths(download_if_missing=auto_download)
+        # Check if we should download
+        if not auto_download and not manager.exists(model_name):
+            return {"0": None, "2": None, "4": None}
 
-        if multipole_paths:
-            # Load each multipole emulator with string keys
-            for l, mp_path in multipole_paths.items():
-                if mp_path and mp_path.exists():
+        # Get path (downloads if needed)
+        emulator_path = manager.get_path(model_name)
+
+        if emulator_path and emulator_path.exists():
+            # Load each multipole emulator
+            for l in [0, 2, 4]:
+                mp_path = emulator_path / str(l)
+                if mp_path.exists():
                     try:
-                        # Load standard multipole emulator
                         emulators[str(l)] = load_multipole_emulator(str(mp_path))
                     except Exception as e:
                         emulators[str(l)] = None
@@ -196,72 +311,41 @@ def _load_emulator_set(model_name: str, config: dict, auto_download: bool = True
             if loaded == 0:
                 warnings.warn(f"No multipole emulators loaded for {model_name}")
         else:
-            warnings.warn(f"Could not find multipole emulator data for {model_name}")
-            # Create empty entries for expected multipoles
+            warnings.warn(f"Could not find emulator data for {model_name}")
             emulators = {"0": None, "2": None, "4": None}
 
     except Exception as e:
         warnings.warn(f"Could not initialize {model_name}: {e}")
-        # Create empty entries for expected multipoles
         emulators = {"0": None, "2": None, "4": None}
 
     return emulators
 
 
-# Load default emulators on import (unless disabled)
-if not os.environ.get("JAXEFFORT_NO_AUTO_DOWNLOAD"):
-    print("jaxeffort: Initializing multipole emulators...")
-
-    # Load all configured models
-    for model_name, config in EMULATOR_CONFIGS.items():
-        try:
-            print(f"  Loading {model_name}...")
-            trained_emulators[model_name] = _load_emulator_set(
-                model_name, config, auto_download=True
-            )
-
-            # Report loading status
-            loaded = sum(1 for v in trained_emulators[model_name].values() if v is not None)
-            total = 3  # Expecting multipoles 0, 2, 4
-            if loaded > 0:
-                loaded_ls = [k for k, v in trained_emulators[model_name].items() if v is not None]
-                print(f"  {model_name}: Loaded {loaded}/{total} multipoles (l={loaded_ls})")
-            else:
-                warnings.warn(f"Failed to load any multipoles for {model_name}")
-
-        except Exception as e:
-            # Ensure import doesn't fail completely
-            warnings.warn(f"Failed to load {model_name} emulators: {e}")
-            trained_emulators[model_name] = {"0": None, "2": None, "4": None}
-else:
-    # Create empty structure when auto-download is disabled
-    for model_name, config in EMULATOR_CONFIGS.items():
-        trained_emulators[model_name] = {"0": None, "2": None, "4": None}
-
-
-def add_emulator_config(
+def add_emulator(
     model_name: str,
-    zenodo_url: str,
+    tarball_url: str,
     description: str = None,
     has_noise: bool = False,
-    checksum: str = None,
+    force: bool = False,
     auto_load: bool = True,
 ):
     """
-    Add a new emulator configuration and optionally load it.
+    Add a new emulator by downloading from URL and adding to Artifacts.toml.
+
+    This is similar to Julia's ArtifactUtils.add_artifact!().
 
     Parameters
     ----------
     model_name : str
-        Name for the model (e.g., "camb_lcdm")
-    zenodo_url : str
-        URL to download the emulator tar.gz file from
+        Name for the model
+    tarball_url : str
+        URL to download the emulator tarball
     description : str, optional
         Description of the model
     has_noise : bool, optional
-        Whether the emulator includes noise component (st/ folder)
-    checksum : str, optional
-        Expected SHA256 checksum of the downloaded file
+        Whether the emulator includes noise component
+    force : bool, optional
+        Overwrite if already exists
     auto_load : bool, optional
         Whether to immediately load the emulators
 
@@ -270,34 +354,46 @@ def add_emulator_config(
     dict
         The loaded emulator for this model
     """
-    global EMULATOR_CONFIGS, trained_emulators
+    global trained_emulators, _artifact_manager
 
-    # Add to configuration
-    EMULATOR_CONFIGS[model_name] = {
-        "zenodo_url": zenodo_url,
-        "description": description or f"{model_name} emulators",
-        "has_noise": has_noise,
-    }
+    # Use pyartifacts.add_artifact to download and add to TOML
+    result = add_artifact(
+        toml_path=_ARTIFACTS_TOML,
+        name=model_name,
+        tarball_url=tarball_url,
+        lazy=True,
+        force=force,
+        verbose=True,
+    )
 
-    # Add checksum if provided
-    if checksum:
-        EMULATOR_CONFIGS[model_name]["checksum"] = checksum
+    # Add extra metadata to the TOML
+    # We need to update the TOML with description and has_noise
+    try:
+        import tomlkit
+        with open(_ARTIFACTS_TOML, "r") as f:
+            doc = tomlkit.load(f)
+
+        if model_name in doc:
+            if description:
+                doc[model_name]["description"] = description
+            doc[model_name]["has_noise"] = has_noise
+
+            with open(_ARTIFACTS_TOML, "w") as f:
+                tomlkit.dump(doc, f)
+    except ImportError:
+        warnings.warn("tomlkit not installed, cannot add metadata to Artifacts.toml")
+
+    # Reset artifact manager to reload the TOML
+    _artifact_manager = None
 
     # Load if requested
     if auto_load:
-        print(f"Loading {model_name} emulator...")
-        trained_emulators[model_name] = _load_emulator_set(
-            model_name, EMULATOR_CONFIGS[model_name], auto_download=True
-        )
+        trained_emulators[model_name] = _load_emulator_set(model_name, auto_download=True)
 
-        # Report status
         loaded = sum(1 for v in trained_emulators[model_name].values() if v is not None)
-        if loaded > 0:
-            print(f"  ✓ Loaded {loaded}/3 multipoles")
-        else:
-            print(f"  ✗ Failed to load emulator")
+        if loaded == 0:
+            warnings.warn(f"Failed to load emulator for {model_name}")
     else:
-        # Create empty structure
         trained_emulators[model_name] = {"0": None, "2": None, "4": None}
 
     return trained_emulators[model_name]
@@ -319,21 +415,46 @@ def reload_emulators(model_name: str = None):
     """
     global trained_emulators
 
+    manager = _get_artifact_manager()
+    if manager is None:
+        warnings.warn("Cannot reload: Artifacts.toml not found")
+        return trained_emulators
+
     if model_name:
-        # Reload specific model
-        if model_name in EMULATOR_CONFIGS:
-            print(f"Reloading {model_name}...")
-            trained_emulators[model_name] = _load_emulator_set(
-                model_name, EMULATOR_CONFIGS[model_name], auto_download=True
-            )
+        if model_name in manager:
+            trained_emulators[model_name] = _load_emulator_set(model_name, auto_download=True)
         else:
             raise ValueError(
-                f"Unknown model: {model_name}. Available: {list(EMULATOR_CONFIGS.keys())}"
+                f"Unknown model: {model_name}. Available: {list_emulators()}"
             )
     else:
-        # Reload all models
-        print("Reloading all emulators...")
-        for name, config in EMULATOR_CONFIGS.items():
-            trained_emulators[name] = _load_emulator_set(name, config, auto_download=True)
+        # Reload all models from Artifacts.toml
+        for name in manager.artifacts:
+            trained_emulators[name] = _load_emulator_set(name, auto_download=True)
 
     return trained_emulators
+
+
+# Load emulators on import (unless disabled)
+if not os.environ.get("JAXEFFORT_NO_AUTO_DOWNLOAD"):
+    manager = _get_artifact_manager()
+    if manager is not None:
+        for model_name in manager.artifacts:
+            try:
+                trained_emulators[model_name] = _load_emulator_set(
+                    model_name, auto_download=True
+                )
+
+                loaded = sum(1 for v in trained_emulators[model_name].values() if v is not None)
+                if loaded == 0:
+                    warnings.warn(f"Failed to load any multipoles for {model_name}")
+
+            except Exception as e:
+                warnings.warn(f"Failed to load {model_name} emulators: {e}")
+                trained_emulators[model_name] = {"0": None, "2": None, "4": None}
+else:
+    # Create empty structure when auto-download is disabled
+    manager = _get_artifact_manager()
+    if manager is not None:
+        for model_name in manager.artifacts:
+            trained_emulators[model_name] = {"0": None, "2": None, "4": None}

@@ -130,7 +130,7 @@ def test_multipole_emulator_loading():
 def test_invalid_parameters():
     """Test handling of invalid parameters."""
     with pytest.raises(ValueError):
-        jaxeffort.W0WaCDMCosmology(h=-0.5)  # Invalid Hubble parameter
+        jaxeffort.w0waCDMCosmology(h=-0.5)  # Invalid Hubble parameter
 ```
 
 ## Reporting Issues

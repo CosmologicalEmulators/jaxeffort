@@ -11,7 +11,7 @@ import jax
 import jax.numpy as jnp
 
 from jaxeffort import (
-    W0WaCDMCosmology,
+    w0waCDMCosmology,
     E_z, D_z, f_z, D_f_z, r_z, dA_z, dL_z,
     E_a, dlogEdloga, Ωm_a,
     a_z,
@@ -31,8 +31,8 @@ class TestBasicFunctions:
         assert np.isclose(a_z(3.0), 0.25)
 
     def test_cosmology_struct_creation(self):
-        """Test W0WaCDMCosmology structure creation."""
-        cosmo = W0WaCDMCosmology(
+        """Test w0waCDMCosmology structure creation."""
+        cosmo = w0waCDMCosmology(
             ln10As=3.044,
             ns=0.9649,
             h=0.6736,

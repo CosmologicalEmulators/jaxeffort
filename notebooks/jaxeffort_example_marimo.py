@@ -124,7 +124,7 @@ def __(np, jaxeffort):
         "z": 1.2,
     }
 
-    cosmo = jaxeffort.W0WaCDMCosmology(
+    cosmo = jaxeffort.w0waCDMCosmology(
         ln10As=cosmo_dict["ln10As"],
         ns=cosmo_dict["ns"],
         h=cosmo_dict["H0"]/100,

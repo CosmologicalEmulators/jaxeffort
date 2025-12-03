@@ -21,7 +21,7 @@ Extension of MultipoleEmulators with stochastic noise terms.
 
 ## Cosmology Classes
 
-### W0WaCDMCosmology
+### w0waCDMCosmology
 
 w₀wₐCDM cosmology with massive neutrinos support.
 

@@ -11,7 +11,7 @@ from functools import partial
 # Import all background cosmology functions from jaxace
 # Handle different jaxace versions that may export Ωma or Ωm_a
 from jaxace.background import (
-    W0WaCDMCosmology,
+    w0waCDMCosmology,
     a_z, E_a, E_z, dlogEdloga, Ωm_a,
     D_z, f_z, D_f_z,
     r_z, dA_z, dL_z,

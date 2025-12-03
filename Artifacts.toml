@@ -1,0 +1,34 @@
+# Artifacts.toml for jaxeffort trained emulators
+#
+# This file declares the available trained emulators for jaxeffort.
+# Compatible with Julia's Pkg.Artifacts system via pyartifacts.
+
+[pybird_mnuw0wacdm]
+git-tree-sha1 = "d309b571f5693718c8612d387820a409479fe50688d4c46c87ba8662c6acc09b"
+lazy = true
+description = "PyBird emulator for massive neutrinos, w0wa CDM cosmology"
+has_noise = false
+
+    [[pybird_mnuw0wacdm.download]]
+    url = "https://zenodo.org/records/17436464/files/trained_effort_pybird_mnuw0wacdm.tar.xz?download=1"
+    sha256 = "d309b571f5693718c8612d387820a409479fe50688d4c46c87ba8662c6acc09b"
+
+[velocileptors_lpt_mnuw0wacdm]
+git-tree-sha1 = "4f942141ecdfe8a71b03f514a47103fe9a5ae3e3c3b46963c7627b4e196ca579"
+lazy = true
+description = "Velocileptors LPT emulator for massive neutrinos, w0wa CDM cosmology"
+has_noise = false
+
+    [[velocileptors_lpt_mnuw0wacdm.download]]
+    url = "https://zenodo.org/records/17635885/files/trained_effort_velocileptors_lpt_mnuw0wacdm.tar.xz?download=1"
+    sha256 = "4f942141ecdfe8a71b03f514a47103fe9a5ae3e3c3b46963c7627b4e196ca579"
+
+[velocileptors_rept_mnuw0wacdm]
+git-tree-sha1 = "33dfa33b1191928198d17f263bae77621d8f46cff25281812cbc2cdddff092d9"
+lazy = true
+description = "Velocileptors REPT emulator for massive neutrinos, w0wa CDM cosmology"
+has_noise = false
+
+    [[velocileptors_rept_mnuw0wacdm.download]]
+    url = "https://zenodo.org/records/17635853/files/trained_effort_velocileptors_rept_mnuw0wacdm.tar.xz?download=1"
+    sha256 = "33dfa33b1191928198d17f263bae77621d8f46cff25281812cbc2cdddff092d9"

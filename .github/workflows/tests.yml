@@ -152,6 +152,6 @@ jobs:
       - name: Test imports
         run: |
           poetry run python -c "import jaxeffort; print('✓ jaxeffort import successful')"
-          poetry run python -c "from jaxeffort import W0WaCDMCosmology, E_z, D_z, f_z; print('✓ background functions import successful')"
+          poetry run python -c "from jaxeffort import w0waCDMCosmology, E_z, D_z, f_z; print('✓ background functions import successful')"
           poetry run python -c "from jaxeffort import MultipoleEmulators; print('✓ emulator classes import successful')"
           poetry run python -c "from jaxeffort import load_multipole_emulator; print('✓ loader functions import successful')"
