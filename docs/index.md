@@ -46,7 +46,7 @@ cosmo_params = jnp.array([z, ln10As, ns, H0, ombh2, omch2, Mnu, w0, wa])
 bias_params = jnp.array([b1, b2, b3, b4, b5, b6, b7, f])
 
 # Compute growth factor
-cosmo = jaxeffort.W0WaCDMCosmology(...)
+cosmo = jaxeffort.w0waCDMCosmology(...)
 D = cosmo.D_z(z)
 
 # Get multipoles

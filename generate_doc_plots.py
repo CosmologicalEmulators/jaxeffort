@@ -66,7 +66,7 @@ def generate_multipoles_plot():
         b = jnp.ones(8)
 
         # Compute D(z) using cosmology
-        cosmo = jaxeffort.W0WaCDMCosmology(
+        cosmo = jaxeffort.w0waCDMCosmology(
             ln10As=theta[1],
             ns=theta[2],
             h=theta[3]/100,
@@ -161,7 +161,7 @@ def generate_jacobian_multipoles_plot():
         b = jnp.ones(8)
 
         # Compute D(z)
-        cosmo = jaxeffort.W0WaCDMCosmology(
+        cosmo = jaxeffort.w0waCDMCosmology(
             ln10As=theta[1],
             ns=theta[2],
             h=theta[3]/100,
@@ -254,7 +254,7 @@ def generate_comparison_plot():
         b = jnp.ones(8)
 
         # Compute D(z)
-        cosmo = jaxeffort.W0WaCDMCosmology(
+        cosmo = jaxeffort.w0waCDMCosmology(
             ln10As=theta[1],
             ns=theta[2],
             h=theta[3]/100,

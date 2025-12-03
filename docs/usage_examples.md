@@ -47,7 +47,7 @@ bias_params = jnp.array([
 ])
 
 # Setup cosmology for growth factor calculation
-cosmo = jaxeffort.W0WaCDMCosmology(
+cosmo = jaxeffort.w0waCDMCosmology(
     ln10As=cosmo_params[1],
     ns=cosmo_params[2],
     h=cosmo_params[3]/100,
@@ -190,7 +190,7 @@ cosmo_lcdm = jaxeffort.LCDMCosmology(
 )
 
 # w0waCDM cosmology
-cosmo_w0wa = jaxeffort.W0WaCDMCosmology(
+cosmo_w0wa = jaxeffort.w0waCDMCosmology(
     ln10As=3.1,
     ns=0.96,
     h=0.67,
