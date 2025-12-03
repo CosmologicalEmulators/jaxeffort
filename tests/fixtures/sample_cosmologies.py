@@ -1,12 +1,12 @@
 """Sample cosmologies and parameters for testing."""
 
 import jax.numpy as jnp
-from jaxace import W0WaCDMCosmology
+from jaxace import w0waCDMCosmology
 
 
 def get_test_cosmology():
     """Get a standard test cosmology."""
-    return W0WaCDMCosmology(
+    return w0waCDMCosmology(
         ln10As=3.044,
         ns=0.9649,
         h=0.6736,

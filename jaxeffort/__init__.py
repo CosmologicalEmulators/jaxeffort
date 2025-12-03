@@ -23,7 +23,7 @@ from jaxeffort.jaxeffort import (
     load_preprocessing,
     load_stoch_model,
     # Cosmology functions from jaxace (re-exported for convenience)
-    W0WaCDMCosmology,
+    w0waCDMCosmology,
     a_z,
     E_a,
     E_z,
@@ -151,7 +151,7 @@ __all__ = [
     "trained_emulators",
     "reload_emulators",
     # Cosmology functions (from jaxace)
-    "W0WaCDMCosmology",
+    "w0waCDMCosmology",
     "a_z",
     "E_a",
     "E_z",
