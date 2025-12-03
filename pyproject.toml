@@ -12,6 +12,7 @@ flax = "^0.10.0"
 jax = "^0.4.30"
 jaxace = "^0.2.0"
 numpy = "^2.2.6"
+fetch-artifacts = "^0.1.0"
 
 [tool.poetry.group.dev]
 optional = true

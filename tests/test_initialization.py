@@ -31,7 +31,7 @@ class TestNoAutoDownload:
             importlib.reload(jaxeffort)
 
             # Check that emulators have None values when disabled
-            for model_name in jaxeffort.EMULATOR_CONFIGS:
+            for model_name in jaxeffort.list_emulators():
                 assert model_name in jaxeffort.trained_emulators
                 # Should have keys "0", "2", "4" all set to None
                 assert jaxeffort.trained_emulators[model_name]["0"] is None
@@ -54,33 +54,27 @@ class TestNoAutoDownload:
 class TestDynamicEmulatorConfig:
     """Test dynamic emulator configuration functions."""
 
-    def test_add_emulator_config(self):
-        """Test adding a new emulator configuration."""
+    def test_list_emulators(self):
+        """Test listing available emulators from Artifacts.toml."""
         import jaxeffort
 
-        # Add a test configuration (without auto_load to avoid actual download)
-        result = jaxeffort.add_emulator_config(
-            model_name="test_model",
-            zenodo_url="https://example.com/test.tar.gz",
-            description="Test emulator",
-            has_noise=True,
-            checksum="abc123",
-            auto_load=False
-        )
+        emulators = jaxeffort.list_emulators()
 
-        # Check it was added
-        assert "test_model" in jaxeffort.EMULATOR_CONFIGS
-        assert jaxeffort.EMULATOR_CONFIGS["test_model"]["zenodo_url"] == "https://example.com/test.tar.gz"
-        assert jaxeffort.EMULATOR_CONFIGS["test_model"]["description"] == "Test emulator"
-        assert jaxeffort.EMULATOR_CONFIGS["test_model"]["has_noise"] is True
-        assert jaxeffort.EMULATOR_CONFIGS["test_model"]["checksum"] == "abc123"
+        # Should have at least the three default emulators
+        assert "pybird_mnuw0wacdm" in emulators
+        assert "velocileptors_lpt_mnuw0wacdm" in emulators
+        assert "velocileptors_rept_mnuw0wacdm" in emulators
 
-        # Check result
-        assert not result.get("loaded", False)
+    def test_get_emulator_info(self):
+        """Test getting emulator info from Artifacts.toml."""
+        import jaxeffort
 
-        # Clean up
-        del jaxeffort.EMULATOR_CONFIGS["test_model"]
-        del jaxeffort.trained_emulators["test_model"]
+        info = jaxeffort.get_emulator_info("pybird_mnuw0wacdm")
+
+        assert info["name"] == "pybird_mnuw0wacdm"
+        assert "git_tree_sha1" in info
+        assert "description" in info
+        assert "has_noise" in info
 
     def test_reload_emulators_specific_model(self):
         """Test reloading a specific emulator."""
@@ -113,7 +107,7 @@ class TestDynamicEmulatorConfig:
         result = jaxeffort.reload_emulators()
 
         # Check all configured models are in result
-        for model_name in jaxeffort.EMULATOR_CONFIGS:
+        for model_name in jaxeffort.list_emulators():
             assert model_name in result
 
 
@@ -159,23 +153,15 @@ class TestEmulatorAccessFunctions:
 class TestEmulatorLoadingErrors:
     """Test error handling during emulator loading."""
 
-    def test_load_emulator_with_exception(self):
-        """Test emulator loading with exceptions."""
+    def test_load_emulator_with_nonexistent_model(self):
+        """Test emulator loading with nonexistent model."""
         import jaxeffort
         from jaxeffort import _load_emulator_set
 
-        # Create a config that will fail
-        bad_config = {
-            "zenodo_url": "https://nonexistent.example.com/bad.tar.gz",
-            "description": "Bad emulator",
-            "has_noise": False
-        }
+        # Loading a model that doesn't exist in Artifacts.toml should handle gracefully
+        result = _load_emulator_set("nonexistent_model", auto_download=False)
 
-        # This should handle the exception gracefully - patch to simulate error
-        with patch('jaxeffort.data_fetcher.MultipoleDataFetcher.get_multipole_paths', return_value=None):
-            result = _load_emulator_set("bad_model", bad_config, auto_download=False)
-
-            # Should return dict with None values
-            assert result["0"] is None
-            assert result["2"] is None
-            assert result["4"] is None
+        # Should return dict with None values
+        assert result["0"] is None
+        assert result["2"] is None
+        assert result["4"] is None
