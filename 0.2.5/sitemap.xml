@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>https://cosmologicalemulators.github.io/jaxeffort/0.2.5/</loc>
+         <lastmod>2026-01-22</lastmod>
+    </url>
+    <url>
+         <loc>https://cosmologicalemulators.github.io/jaxeffort/0.2.5/api/</loc>
+         <lastmod>2026-01-22</lastmod>
+    </url>
+    <url>
+         <loc>https://cosmologicalemulators.github.io/jaxeffort/0.2.5/contributing/</loc>
+         <lastmod>2026-01-22</lastmod>
+    </url>
+    <url>
+         <loc>https://cosmologicalemulators.github.io/jaxeffort/0.2.5/usage_examples/</loc>
+         <lastmod>2026-01-22</lastmod>
+    </url>
+    <url>
+         <loc>https://cosmologicalemulators.github.io/jaxeffort/0.2.5/examples/data_management/</loc>
+         <lastmod>2026-01-22</lastmod>
+    </url>
+</urlset>
