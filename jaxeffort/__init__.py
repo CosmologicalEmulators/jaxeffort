@@ -65,7 +65,7 @@ from fetch_artifacts import (
 trained_emulators: Dict[str, Dict[str, Optional[MultipoleEmulators]]] = {}
 
 # Path to Artifacts.toml (in package directory)
-_ARTIFACTS_TOML = Path(__file__).parent.parent / "Artifacts.toml"
+_ARTIFACTS_TOML = Path(__file__).parent / "Artifacts.toml"
 
 # Global artifact manager
 _artifact_manager = None

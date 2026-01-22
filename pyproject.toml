@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "jaxeffort"
-version = "0.2.4"
+version = "0.2.5"
 description = "JAX-based emulator for galaxy power spectra with bias modeling"
 authors = ["marcobonici <bonici.marco@gmail.com>"]
 readme = "README.md"
