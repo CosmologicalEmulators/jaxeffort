@@ -462,25 +462,6 @@ files = [
 ]
 
 [[package]]
-name = "interpax"
-version = "0.3.10"
-description = "Interpolation and function approximation with JAX"
-optional = false
-python-versions = ">=3.10"
-groups = ["main"]
-files = [
-    {file = "interpax-0.3.10-py3-none-any.whl", hash = "sha256:9b3c43cf2ea93d46c5a1c8c98a133b29cc8c3cca7e8a80688c1b1c11f05da307"},
-    {file = "interpax-0.3.10.tar.gz", hash = "sha256:6bed2812b555ee2bc2917ca833d1a04c9f8870c868c6800bd6b941e0fb2f738e"},
-]
-
-[package.dependencies]
-equinox = ">=0.11.0,<0.14"
-jax = ">=0.4.30,<0.8"
-jaxtyping = ">=0.2.24,<0.4.0"
-lineax = ">=0.0.5,<=0.0.8"
-numpy = ">=1.20.0,<2.4"
-
-[[package]]
 name = "isort"
 version = "5.13.2"
 description = "A Python utility / library to sort Python imports."
@@ -527,21 +508,20 @@ xprof = ["xprof"]
 
 [[package]]
 name = "jaxace"
-version = "0.4.0"
+version = "0.5.0"
 description = "JAX implementation of AbstractCosmologicalEmulators.jl interface with artifact support"
 optional = false
 python-versions = "<4.0,>=3.10"
 groups = ["main"]
 files = [
-    {file = "jaxace-0.4.0-py3-none-any.whl", hash = "sha256:94c715dba447a72f8314c3064297190877ff29312e3034f15071e973ceeb81ad"},
-    {file = "jaxace-0.4.0.tar.gz", hash = "sha256:ce00aaea120538660ae4c8b72b8dcaab4bc297d713c69bf2cd576edb669818c0"},
+    {file = "jaxace-0.5.0-py3-none-any.whl", hash = "sha256:8e8908cff1b829a7466c5460a91505eb83a73563a13f66d6e07d733c7309b9fb"},
+    {file = "jaxace-0.5.0.tar.gz", hash = "sha256:41981372aae6f7d21ca395ceb43a287d162c38469c225498cf0567ae458030d8"},
 ]
 
 [package.dependencies]
 diffrax = ">=0.7.0,<0.8.0"
 fetch-artifacts = ">=0.1.0,<0.2.0"
 flax = ">=0.10.0,<0.11.0"
-interpax = ">=0.3.9,<0.4.0"
 jax = ">=0.4.30"
 numpy = ">=2.2.6,<3.0.0"
 quadax = ">=0.2.9,<0.3.0"
@@ -1612,4 +1592,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.10"
-content-hash = "83d77b6ea16b5072e7f37615a0f2bf0dd227c708069931573adc04d08fd0e2c8"
+content-hash = "3586ff840713f9a689d152844255ac8a3f59024d73c995e88477d7961d4f3e4c"
