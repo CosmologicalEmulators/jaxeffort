@@ -49,6 +49,19 @@ from jaxeffort.jaxeffort import (
     inv_maximin,
 )
 
+from .projection import (
+    q_par_perp,
+    apply_AP,
+    apply_AP_check,
+    window_convolution,
+    ChebyshevOperator,
+    prepare_chebyshev_operator,
+    apply_chebyshev_operator,
+    APWindowChebyshevPlan,
+    prepare_ap_window_chebyshev,
+    apply_AP_and_window,
+)
+
 # Import fetch_artifacts for artifact management
 from fetch_artifacts import (
     load_artifacts,
@@ -139,6 +152,17 @@ __all__ = [
     "load_jacobian_bias_combination",
     "load_preprocessing",
     "load_stoch_model",
+    "q_par_perp",
+    "apply_AP",
+    "apply_AP_check",
+    "window_convolution",
+    "gausslobatto",
+    "ChebyshevOperator",
+    "prepare_chebyshev_operator",
+    "apply_chebyshev_operator",
+    "APWindowChebyshevPlan",
+    "prepare_ap_window_chebyshev",
+    "apply_AP_and_window",
     # Artifact management
     "get_emulator_path",
     "list_emulators",

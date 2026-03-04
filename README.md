@@ -39,7 +39,20 @@ Then you are good to go! You have to create input arrays for cosmological and bi
 ```python3
 cosmo_params = np.array([...])  # cosmological parameters
 bias_params = np.array([...])   # bias parameters
-result = trained_emu.get_Pl(cosmo_params, bias_params, D)
+P0, P2 = trained_emu.get_Pl(cosmo_params, bias_params, D)
+```
+
+Additionally, `jaxeffort` supports mapping theoretical spectra into observational spaces by modeling Alcock-Paczynski (AP) effects and Window Systematics Convolution:
+```python3
+from jaxeffort import apply_AP, window_convolution, q_par_perp
+# Calculate mapping params q_par, q_perp from cosmological distances
+q_par, q_perp = q_par_perp(dA_mcmc, dA_ref, E_mcmc, E_ref)
+
+# Apply AP effects interpolating theoretical multipoles
+P0_ap, P2_ap, P4_ap = apply_AP(k_input, k_output, P0, P2, P4, q_par, q_perp)
+
+# Convolve with Window Function matrix
+P0_obs = window_convolution(Window_Matrix, P0_ap)
 ```
 
 For a more detailed explanation, check the tutorial in the `notebooks` folder, which also shows a comparison with standard power spectrum calculations.
