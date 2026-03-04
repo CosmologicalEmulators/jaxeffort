@@ -1,10 +1,11 @@
 [tool.poetry]
 name = "jaxeffort"
-version = "0.2.4"
+version = "0.3.0"
 description = "JAX-based emulator for galaxy power spectra with bias modeling"
 authors = ["marcobonici <bonici.marco@gmail.com>"]
 readme = "README.md"
 packages = [{include = "jaxeffort"}]
+include = ["jaxeffort/Artifacts.toml"]
 
 [tool.poetry.dependencies]
 python = "^3.10"
