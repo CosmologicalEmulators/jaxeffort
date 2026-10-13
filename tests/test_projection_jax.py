@@ -21,6 +21,31 @@ from jaxeffort import (
 from jaxeffort.projection import gausslobatto
 
 
+@pytest.mark.parametrize("degree", [0, -1])
+@pytest.mark.parametrize("kind", ["operator", "ap_window"])
+def test_chebyshev_preparation_rejects_nonpositive_degree(degree, kind):
+    grid = jnp.linspace(0.01, 0.2, 5)
+    matrix = jnp.eye(5)
+    with pytest.raises(ValueError, match="K must be at least 1"):
+        if kind == "operator":
+            prepare_chebyshev_operator(matrix, grid, 0.01, 0.2, degree)
+        else:
+            prepare_ap_window_chebyshev(matrix, matrix, matrix, grid, 0.01, 0.2, degree)
+
+
+def test_chebyshev_minimum_degree_remains_supported():
+    grid = jnp.linspace(0.01, 0.2, 5)
+    matrix = jnp.eye(5)
+    op = prepare_chebyshev_operator(matrix, grid, 0.01, 0.2, 1)
+    np.testing.assert_allclose(jax.jit(apply_chebyshev_operator)(op, 2*op.plan.nodes[0] + 3),
+                               2*grid + 3, atol=1e-14)
+    plan = prepare_ap_window_chebyshev(matrix, matrix, matrix, grid, 0.01, 0.2, 1)
+    spectra = (2*grid + 3, -grid + 1, 0.5*grid)
+    actual = jax.jit(apply_AP_and_window)(plan, grid, *spectra, 1.0, 1.0)
+    for result, expected in zip(actual, spectra):
+        np.testing.assert_allclose(result, expected, atol=1e-13)
+
+
 @pytest.mark.parametrize("n", [4, 8, 16, 32, 64])
 def test_lobatto_polynomial_exactness(n):
     nodes, weights = gausslobatto(n)

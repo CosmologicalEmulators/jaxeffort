@@ -141,9 +141,10 @@ def test_apply_AP_check_consistency():
 
 def test_chebyshev_operator():
     """
-    Validates ChebyshevOperator + apply_chebyshev_operator produce the same result
-    as direct matrix multiplication M @ v.
-    Matches Effort.jl's ChebyshevOperator / apply_chebyshev_operator.
+    Checks the operator's decomposition-and-contraction wiring.
+
+    This is an internal consistency check, not an independent numerical reference.
+    test_projection_jax.py separately compares against exact polynomial M @ v.
     """
     from jaxeffort.projection import prepare_chebyshev_operator, apply_chebyshev_operator
     from jaxace.chebyshev import chebpoints, chebyshev_decomposition, prepare_chebyshev_plan
@@ -177,9 +178,10 @@ def test_chebyshev_operator():
 
 def test_ap_window_chebyshev_plan():
     """
-    Validates APWindowChebyshevPlan + apply_AP_and_window produce the same result
-    as sequential apply_AP + window_convolution.
-    Matches Effort.jl's APWindowChebyshevPlan / apply_AP_and_window.
+    Smoke-test APWindowChebyshevPlan output shapes and finiteness.
+
+    Independent comparisons with sequential dense AP + window convolution live
+    in test_projection_jax.py and test_projection_emulators.py.
     """
     from jaxeffort.projection import (
         prepare_ap_window_chebyshev,

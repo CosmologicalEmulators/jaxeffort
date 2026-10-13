@@ -89,9 +89,15 @@ concatenated AP spectra using `window_convolution`.
 For cosmology gradients, construct `w0waCDMCosmology` **inside**
 the compiled function from its numerical arguments, then call `q_par_perp`.
 The upstream cosmology dataclass is not itself a PyTree. `apply_AP_check` is an
-eager SciPy reference, not a JIT/AD path. Other projection functions support JIT
-and reverse-mode differentiation; interpolation method and quadrature order are
-static choices.
+eager SciPy reference, not a JIT/AD path. `apply_AP`, `window_convolution`,
+`apply_chebyshev_operator`, and `apply_AP_and_window` support JIT and reverse-mode
+differentiation; interpolation method and quadrature order are static choices.
+
+`prepare_chebyshev_operator` and `prepare_ap_window_chebyshev` are host-side setup:
+call them outside JIT with concrete domain bounds and an integer degree `K >= 1`.
+Their upstream plan constructor does not support traced bounds or degree-zero
+plans. The resulting plans can be passed as dynamic PyTree arguments to JIT-compiled
+application functions; gradients can flow through their array data.
 
 jaxace 0.7 is required. Older 0.5 releases produce NaN reverse-mode Akima
 derivatives on flat/zero multipole columns; the upstream fix is exercised by

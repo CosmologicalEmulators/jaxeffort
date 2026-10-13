@@ -515,16 +515,21 @@ def prepare_chebyshev_operator(
 
     Matches Effort.jl's prepare_chebyshev_operator.
 
+    Host-side setup: domain bounds and degree must be concrete, not traced.
+    The returned plan is a PyTree for JIT/AD-compatible application.
+
     Args:
         M: The linear operator matrix of shape (n_out, n_x).
         x_grid: Dense x grid of length n_x where M is evaluated.
         x_min: Domain minimum for the Chebyshev basis.
         x_max: Domain maximum for the Chebyshev basis.
-        K: Polynomial degree (K+1 Chebyshev nodes).
+        K: Integer polynomial degree >= 1 (K+1 Chebyshev nodes).
 
     Returns:
         ChebyshevOperator with precomputed M_prime = M @ T_mat.
     """
+    if K < 1:
+        raise ValueError("K must be at least 1; degree-zero Chebyshev plans are unsupported")
     T_mat = chebyshev_polynomials(x_grid, x_min, x_max, K)  # (n_x, K+1)
     M_prime = M @ T_mat                                       # (n_out, K+1)
     plan = prepare_chebyshev_plan(x_min, x_max, K)
@@ -609,17 +614,22 @@ def prepare_ap_window_chebyshev(
 
     Matches Effort.jl's prepare_ap_window_chebyshev.
 
+    Host-side setup: domain bounds and degree must be concrete, not traced.
+    The returned plan is a PyTree for JIT/AD-compatible application.
+
     Args:
         W0, W2, W4: Window matrices for multipoles ℓ ∈ {0, 2, 4},
                     each of shape (n_k_out, n_k_dense).
         k_dense: Dense wavenumber grid on which W is evaluated.
         k_min: Minimum k for Chebyshev domain.
         k_max: Maximum k for Chebyshev domain.
-        K: Polynomial degree.
+        K: Integer polynomial degree >= 1.
 
     Returns:
         APWindowChebyshevPlan ready for use with apply_AP_and_window.
     """
+    if K < 1:
+        raise ValueError("K must be at least 1; degree-zero Chebyshev plans are unsupported")
     T_mat = chebyshev_polynomials(k_dense, k_min, k_max, K)  # (n_dense, K+1)
     M0 = W0 @ T_mat
     M2 = W2 @ T_mat

@@ -50,6 +50,7 @@ from jaxeffort.jaxeffort import (
 )
 
 from .projection import (
+    gausslobatto,
     q_par_perp,
     apply_AP,
     apply_AP_check,
