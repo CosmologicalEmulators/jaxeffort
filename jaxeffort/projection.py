@@ -9,7 +9,6 @@ from jaxace.chebyshev import (
     prepare_chebyshev_plan,
     chebyshev_decomposition,
 )
-from jaxace.background import E_z, dA_z, d̃A_z
 
 
 import numpy as np
@@ -84,7 +83,9 @@ def _halfrec(n, alpha, beta, flag):
         P, PP = _innerjacobi_rec(n, x, alpha, beta)
         dx = P / PP
         x -= dx
-        if np.max(dx**2) <= np.finfo(np.float64).eps / 1e-6:
+        # Stop on the Newton step itself. The old squared-step threshold
+        # allowed ~1e-5 steps and left ~1e-9 errors in AP's identity map.
+        if np.max(np.abs(dx)) <= 4 * np.finfo(np.float64).eps:
             break
 
     P, PP = _innerjacobi_rec(n, x, alpha, beta)
@@ -230,15 +231,18 @@ def q_par_perp(z, cosmo_mcmc, cosmo_ref):
     Calculates the parallel (q_par) and perpendicular (q_perp) Alcock-Paczynski (AP)
     parameters at a given redshift `z`.
 
-    Matches Effort.jl's q_par_perp which uses the **conformal** angular diameter
-    distance d̃A (i.e. the comoving angular diameter distance), not the physical dA.
+    Uses E(z)=H(z)/H0 and dimensionless angular diameter distances, matching
+    Effort.jl's h-scaled wavenumber convention. Both cosmologies are jaxace
+    w0waCDMCosmology objects. Inside jit/grad, construct them from the traced
+    parameter arrays (jaxace does not register the dataclass as a PyTree).
+    The distance ratio is defined here for z > 0.
     """
-    E_ref = E_z(z, cosmo_ref)
-    E_mcmc = E_z(z, cosmo_mcmc)
+    E_ref = cosmo_ref.E_z(z)
+    E_mcmc = cosmo_mcmc.E_z(z)
 
-    # Use conformal (comoving) angular diameter distance to match Julia's d̃A_z
-    dA_tilde_ref = d̃A_z(z, cosmo_ref)
-    dA_tilde_mcmc = d̃A_z(z, cosmo_mcmc)
+    # The jaxace free functions accept densities and h, not cosmology objects.
+    dA_tilde_ref = cosmo_ref.d̃A_z(z)
+    dA_tilde_mcmc = cosmo_mcmc.d̃A_z(z)
 
     q_perp = dA_tilde_mcmc / dA_tilde_ref
     q_par = E_ref / E_mcmc
@@ -278,7 +282,30 @@ def apply_AP(k_input, k_output, mono, quad, hexa, q_par, q_perp, n_GL_points=8, 
     """
     Calculates the observed power spectrum multipole moments (monopole, quadrupole, hexadecapole)
     on a given observed wavenumber grid `k_output` leveraging Gauss-Lobatto quadrature integrals.
+
+    Multipoles have shape (n_k,) or (n_k, n_columns). For matrices, each AP
+    parameter may be a shared scalar or a vector of length n_columns. Columns
+    with independent AP parameters are mapped with vmap. Keep method and
+    n_GL_points static when wrapping this function in another jit.
     """
+    mono, quad, hexa = map(jnp.asarray, (mono, quad, hexa))
+    q_par, q_perp = jnp.asarray(q_par), jnp.asarray(q_perp)
+    if mono.ndim not in (1, 2) or quad.shape != mono.shape or hexa.shape != mono.shape:
+        raise ValueError("Multipoles must have matching (n_k,) or (n_k, n_columns) shapes")
+    if mono.shape[0] != len(k_input):
+        raise ValueError("Multipole first dimension must match k_input")
+    if q_par.ndim or q_perp.ndim:
+        if mono.ndim != 2 or any(q.ndim > 1 or (q.ndim == 1 and q.shape[0] != mono.shape[1])
+                                for q in (q_par, q_perp)):
+            raise ValueError("AP parameters must be scalars or vectors matching the multipole columns")
+        def project_column(m, q, h, parallel, perpendicular):
+            return apply_AP(k_input, k_output, m, q, h, parallel, perpendicular,
+                            n_GL_points=n_GL_points, method=method)
+        return jax.vmap(project_column,
+                        in_axes=(1, 1, 1, 0 if q_par.ndim else None,
+                                 0 if q_perp.ndim else None),
+                        out_axes=1)(mono, quad, hexa, q_par, q_perp)
+
     nk = len(k_output)
 
     # Compute nodes and weights for 2*n_GL_points Gauss-Lobatto quadrature
@@ -412,13 +439,14 @@ def apply_AP_check(
     hexa = np.asarray(hexa)
 
     if method == "Cubic":
-        int_mono = CubicSpline(k_input, mono, extrapolate=True)
-        int_quad = CubicSpline(k_input, quad, extrapolate=True)
-        int_hexa = CubicSpline(k_input, hexa, extrapolate=True)
+        # jaxace/ACE use natural boundaries, not SciPy's not-a-knot default.
+        int_mono = CubicSpline(k_input, mono, bc_type="natural", extrapolate=True)
+        int_quad = CubicSpline(k_input, quad, bc_type="natural", extrapolate=True)
+        int_hexa = CubicSpline(k_input, hexa, bc_type="natural", extrapolate=True)
     elif method == "Akima":
-        int_mono = Akima1DInterpolator(k_input, mono)
-        int_quad = Akima1DInterpolator(k_input, quad)
-        int_hexa = Akima1DInterpolator(k_input, hexa)
+        int_mono = Akima1DInterpolator(k_input, mono, extrapolate=True)
+        int_quad = Akima1DInterpolator(k_input, quad, extrapolate=True)
+        int_hexa = Akima1DInterpolator(k_input, hexa, extrapolate=True)
     else:
         raise ValueError(f"Unknown method: {method}")
 
@@ -444,6 +472,7 @@ def apply_AP_check(
 # Chebyshev-Optimized Operators (matching Effort.jl)
 # =============================================================================
 
+@jax.tree_util.register_pytree_node_class
 class ChebyshevOperator:
     """
     A linear operator M compressed using Chebyshev decomposition.
@@ -461,6 +490,17 @@ class ChebyshevOperator:
     def __init__(self, M_prime, plan: ChebyshevPlan):
         self.M_prime = M_prime
         self.plan = plan
+
+    def tree_flatten(self):
+        # jaxace's NamedTuple plan makes K and dim leaves by default, but
+        # decomposition uses them as Python axis/shape metadata.
+        return (self.M_prime, self.plan.nodes), (self.plan.K, self.plan.dim)
+
+    @classmethod
+    def tree_unflatten(cls, metadata, children):
+        K, dim = metadata
+        M_prime, nodes = children
+        return cls(M_prime, ChebyshevPlan(K=K, nodes=nodes, dim=dim))
 
 
 def prepare_chebyshev_operator(
@@ -513,6 +553,7 @@ def apply_chebyshev_operator(
     return op.M_prime @ c
 
 
+@jax.tree_util.register_pytree_node_class
 class APWindowChebyshevPlan:
     """
     A plan for combining AP effect and window function convolution via Chebyshev.
@@ -540,6 +581,18 @@ class APWindowChebyshevPlan:
         self.k_min = k_min
         self.k_max = k_max
         self.K = K
+
+    def tree_flatten(self):
+        children = (self.M0, self.M2, self.M4, self.decomp_plan.nodes,
+                    self.sparse_k_nodes, self.k_min, self.k_max)
+        return children, (self.decomp_plan.K, self.decomp_plan.dim, self.K)
+
+    @classmethod
+    def tree_unflatten(cls, metadata, children):
+        degrees, dim, K = metadata
+        M0, M2, M4, nodes, sparse_k_nodes, k_min, k_max = children
+        return cls(M0, M2, M4, ChebyshevPlan(K=degrees, nodes=nodes, dim=dim),
+                   sparse_k_nodes, k_min, k_max, K)
 
 
 def prepare_ap_window_chebyshev(

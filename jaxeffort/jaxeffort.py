@@ -7,6 +7,12 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 from functools import partial
+from .builtins import (
+    BUILTIN_COMPONENT_POSTPROCESSING,
+    BUILTIN_STOCHMODELS,
+    BUILTIN_BIAS_COMBINATIONS,
+    BUILTIN_JAC_BIAS_COMBINATIONS,
+)
 
 # Import all background cosmology functions from jaxace
 # Handle different jaxace versions that may export Ωma or Ωm_a
@@ -174,13 +180,15 @@ class MultipoleEmulators:
 
         return P11_output, Ploop_output, Pct_output
 
-    def get_Pl(self, cosmology, biases, D):
+    def get_Pl(self, cosmology, biases, D, **stoch_kwargs):
         """
         Get P_ℓ using the multipole's bias combination function.
         Matches Effort.jl where BiasCombination is at PℓEmulator level only.
 
         This method uses JIT compilation for performance.
         Includes stochastic components via StochModel.
+        Additional keyword arguments are forwarded to StochModel and remain
+        dynamic JAX inputs (for example, a tracer-dependent noise normalization).
         """
         if self.bias_combination is None:
             raise ValueError("bias_combination is required to compute P_ℓ with biases")
@@ -188,10 +196,10 @@ class MultipoleEmulators:
         # Create JIT-compiled version on first call
         if not hasattr(self, '_jit_get_Pl'):
             @partial(jax.jit, static_argnums=(0,))
-            def _jit_get_Pl(self, cosmology, biases, D):
+            def _jit_get_Pl(self, cosmology, biases, D, **stoch_kwargs):
                 P11_comp, Ploop_comp, Pct_comp = self.get_multipole_components(cosmology, D)
                 # Add stochastic components - StochModel takes k-grid as input
-                stoch_comp = self.stoch_model(self.P11.k_grid)
+                stoch_comp = self.stoch_model(self.P11.k_grid, **stoch_kwargs)
                 stacked_array = jnp.hstack((P11_comp, Ploop_comp, Pct_comp, stoch_comp))
                 # BiasCombination returns coefficient vector
                 biases_vec = self.bias_combination(biases)
@@ -199,14 +207,14 @@ class MultipoleEmulators:
                 return stacked_array @ biases_vec
             self._jit_get_Pl = _jit_get_Pl
 
-        return self._jit_get_Pl(self, cosmology, biases, D)
+        return self._jit_get_Pl(self, cosmology, biases, D, **stoch_kwargs)
 
     def get_Pl_no_bias(self, cosmology, D):
         """Get raw components without bias combination."""
         P11_output, Ploop_output, Pct_output = self.get_multipole_components(cosmology, D)
         return jnp.hstack((P11_output, Ploop_output, Pct_output))
 
-    def get_Pl_jacobian(self, cosmology, biases, D):
+    def get_Pl_jacobian(self, cosmology, biases, D, **stoch_kwargs):
         """
         Compute both the power spectrum multipole P_ℓ and its Jacobian with respect to
         bias parameters.
@@ -216,13 +224,15 @@ class MultipoleEmulators:
         It computes both quantities in a single pass, avoiding redundant neural network
         evaluations.
 
-        The Jacobian is computed using the analytical derivative of the bias combination
-        function, which is significantly faster than automatic differentiation.
+        The coefficient Jacobian is contracted with the component matrix without
+        differentiating the neural networks. Configured artifacts use the canonical
+        analytical Jacobian shared with Effort.jl.
 
         Args:
             cosmology: Array of cosmological parameters.
             biases: Array of bias parameters.
             D: Growth factor value.
+            **stoch_kwargs: Dynamic keyword arguments forwarded to StochModel.
 
         Returns:
             Tuple[jnp.ndarray, jnp.ndarray]: (P_ℓ, ∂P_ℓ/∂b) where:
@@ -235,18 +245,18 @@ class MultipoleEmulators:
         if self.jacobian_bias_combination is None:
             raise ValueError(
                 "jacobian_bias_combination is required to compute Jacobian. "
-                "The emulator was loaded without the jacbiascombination.py file. "
-                "Please ensure the file exists in the emulator directory."
+                "Pass a coefficient Jacobian when constructing MultipoleEmulators, "
+                "or configure jacbiascombination_name / jacbiascombination.py in the artifact."
             )
 
         # Create JIT-compiled version on first call
         if not hasattr(self, '_jit_get_Pl_jacobian'):
             @partial(jax.jit, static_argnums=(0,))
-            def _jit_get_Pl_jacobian(self, cosmology, biases, D):
+            def _jit_get_Pl_jacobian(self, cosmology, biases, D, **stoch_kwargs):
                 # Get all components (single NN evaluation)
                 P11_comp, Ploop_comp, Pct_comp = self.get_multipole_components(cosmology, D)
                 # Add stochastic components
-                stoch_comp = self.stoch_model(self.P11.k_grid)
+                stoch_comp = self.stoch_model(self.P11.k_grid, **stoch_kwargs)
                 stacked_array = jnp.hstack((P11_comp, Ploop_comp, Pct_comp, stoch_comp))
 
                 # Compute bias combination and its Jacobian
@@ -263,7 +273,7 @@ class MultipoleEmulators:
 
             self._jit_get_Pl_jacobian = _jit_get_Pl_jacobian
 
-        return self._jit_get_Pl_jacobian(self, cosmology, biases, D)
+        return self._jit_get_Pl_jacobian(self, cosmology, biases, D, **stoch_kwargs)
 
 
 def load_preprocessing(root_path, filename):
@@ -388,6 +398,19 @@ def load_stoch_model(root_path, filename="stochmodel", required=True):
         return None
 
 
+def _load_builtin_or_file(folder, config, key, registry, loader):
+    """Match Effort's flat/nested config lookup; never hide an unknown name."""
+    description = config.get("emulator_description", {})
+    name = config.get(key) if key in config else (
+        description.get(key) if isinstance(description, dict) else None
+    )
+    if name is None:
+        return loader(str(folder))
+    if not isinstance(name, str) or name not in registry:
+        raise ValueError(f"Unknown {key}: {name!r}. Available: {', '.join(sorted(registry))}")
+    return registry[name]
+
+
 def load_component_emulator(folder_path):
     """Load a component emulator (P11, Ploop, Pct, or Noise) using jaxace infrastructure."""
     from pathlib import Path
@@ -413,7 +436,10 @@ def load_component_emulator(folder_path):
     )
 
     # Load postprocessing
-    postprocessing = load_preprocessing(str(folder_path), "postprocessing")
+    postprocessing = _load_builtin_or_file(
+        folder_path, nn_dict, "postprocessing_name", BUILTIN_COMPONENT_POSTPROCESSING,
+        lambda path: load_preprocessing(path, "postprocessing"),
+    )
 
     # Extract emulator description
     emulator_description = nn_dict.get("emulator_description", {})
@@ -434,6 +460,8 @@ def load_multipole_emulator(folder_path: str) -> MultipoleEmulators:
     """
     Loads the three multipole emulators (P11, Ploop, Pct) from their respective subfolders.
     Bias combination is loaded at the multipole level, matching Effort.jl structure.
+    Canonical function names in multipole_setup.json take precedence over legacy
+    Python files, matching Effort.jl. Unknown configured names raise ValueError.
 
     Args:
         folder_path (str): The path to the folder containing the subfolders `11`, `loop`, and `ct`.
@@ -454,14 +482,22 @@ def load_multipole_emulator(folder_path: str) -> MultipoleEmulators:
     Ploop_emulator = load_component_emulator(Ploop_path)
     Pct_emulator = load_component_emulator(Pct_path)
 
-    # Load multipole-level bias combination - this is required (matches Effort.jl PℓEmulator)
-    multipole_bias_combination = load_bias_combination(str(folder_path), required=True)
-
-    # Load stochastic model - this is required (matches Effort.jl StochModel)
-    stoch_model = load_stoch_model(str(folder_path), required=True)
-
-    # Load Jacobian bias combination - this is optional (matches Effort.jl JacobianBiasCombination)
-    jacobian_bias_combination = load_jacobian_bias_combination(str(folder_path), required=False)
+    setup = folder_path / "multipole_setup.json"
+    config = {}
+    if setup.exists():
+        with setup.open() as f:
+            config = json.load(f)
+    multipole_bias_combination = _load_builtin_or_file(
+        folder_path, config, "biascombination_name", BUILTIN_BIAS_COMBINATIONS,
+        load_bias_combination,
+    )
+    stoch_model = _load_builtin_or_file(
+        folder_path, config, "stochmodel_name", BUILTIN_STOCHMODELS, load_stoch_model,
+    )
+    jacobian_bias_combination = _load_builtin_or_file(
+        folder_path, config, "jacbiascombination_name", BUILTIN_JAC_BIAS_COMBINATIONS,
+        load_jacobian_bias_combination,
+    )
 
     # Return the MultipoleEmulators instance with bias combination, stoch model, and optional Jacobian
     return MultipoleEmulators(P11_emulator, Ploop_emulator, Pct_emulator,

@@ -508,14 +508,14 @@ xprof = ["xprof"]
 
 [[package]]
 name = "jaxace"
-version = "0.5.0"
+version = "0.7.0"
 description = "JAX implementation of AbstractCosmologicalEmulators.jl interface with artifact support"
 optional = false
 python-versions = "<4.0,>=3.10"
 groups = ["main"]
 files = [
-    {file = "jaxace-0.5.0-py3-none-any.whl", hash = "sha256:8e8908cff1b829a7466c5460a91505eb83a73563a13f66d6e07d733c7309b9fb"},
-    {file = "jaxace-0.5.0.tar.gz", hash = "sha256:41981372aae6f7d21ca395ceb43a287d162c38469c225498cf0567ae458030d8"},
+    {file = "jaxace-0.7.0-py3-none-any.whl", hash = "sha256:42efb7348ad805af913ec12bac4b7016cfd6116dab6dcc165fa9998ebf08f3ac"},
+    {file = "jaxace-0.7.0.tar.gz", hash = "sha256:a38c642439066605a12b985dfe01242bc65b2970bc45112f25604522191f7920"},
 ]
 
 [package.dependencies]
@@ -1592,4 +1592,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.10"
-content-hash = "3586ff840713f9a689d152844255ac8a3f59024d73c995e88477d7961d4f3e4c"
+content-hash = "227a48a24880552626d8d487b3ae75f0985f6c7396baa062197a45f63f60eec7"

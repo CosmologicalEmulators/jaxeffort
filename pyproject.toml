@@ -11,8 +11,9 @@ include = ["jaxeffort/Artifacts.toml"]
 python = "^3.10"
 flax = "^0.10.0"
 jax = ">=0.4.30"
-jaxace = "^0.5.0"
+jaxace = "^0.7.0"
 numpy = "^2.2.6"
+scipy = ">=1.13,<2"
 fetch-artifacts = "^0.1.0"
 
 [tool.poetry.group.dev]

@@ -39,21 +39,80 @@ Then you are good to go! You have to create input arrays for cosmological and bi
 ```python3
 cosmo_params = np.array([...])  # cosmological parameters
 bias_params = np.array([...])   # bias parameters
-P0, P2 = trained_emu.get_Pl(cosmo_params, bias_params, D)
+P_ell = trained_emu.get_Pl(cosmo_params, bias_params, D)
 ```
 
 Additionally, `jaxeffort` supports mapping theoretical spectra into observational spaces by modeling Alcock-Paczynski (AP) effects and Window Systematics Convolution:
 ```python3
 from jaxeffort import apply_AP, window_convolution, q_par_perp
-# Calculate mapping params q_par, q_perp from cosmological distances
-q_par, q_perp = q_par_perp(dA_mcmc, dA_ref, E_mcmc, E_ref)
+# Calculate mapping parameters from jaxace cosmology objects at z > 0.
+q_par, q_perp = q_par_perp(z, cosmo_mcmc, cosmo_ref)
 
 # Apply AP effects interpolating theoretical multipoles
+# Historical PyBird artifacts store k_grid as (n_k, 1); AP takes a vector.
+k_input = trained_emu.P11.k_grid.reshape(-1)
 P0_ap, P2_ap, P4_ap = apply_AP(k_input, k_output, P0, P2, P4, q_par, q_perp)
 
 # Convolve with Window Function matrix
 P0_obs = window_convolution(Window_Matrix, P0_ap)
 ```
+
+`apply_AP` supports both `(n_k,)` spectra and `(n_k, n_columns)` matrices.
+Scalar AP parameters are shared by all columns, which is useful for projecting
+bias Jacobians. For independent cosmologies/redshifts, either parameter can instead
+be a vector of length `n_columns`; the columns are mapped with `jax.vmap`.
+Projecting a bias Jacobian this way is exact for **Cubic** interpolation with
+bias-independent AP parameters. Akima's interpolation weights depend on the
+spectrum, so for Akima differentiate the complete prediction with JAX instead
+of treating AP as a spectrum-independent linear operator.
+Grids use the same **h-scaled wavenumber convention as Effort.jl**. Do not mix
+physical-Mpc grids with the dimensionless-distance `q_par_perp` convention.
+
+The Chebyshev-compressed window operators are JAX PyTrees, so prepared plans can
+be passed directly to compiled functions, with their arrays remaining dynamic:
+
+```python
+import jax
+from jaxeffort import prepare_ap_window_chebyshev, apply_AP_and_window
+
+plan = prepare_ap_window_chebyshev(W0, W2, W4, k_dense, k_min, k_max, K=40)
+project = jax.jit(apply_AP_and_window, static_argnames=("method", "n_GL_points"))
+P0_obs, P2_obs, P4_obs = project(plan, k_input, P0, P2, P4, q_par, q_perp)
+```
+
+Choose the Chebyshev degree by comparing against dense AP followed by the same
+window matrices; compression is an approximation, not an exact identity for
+arbitrary spectra. `W0`, `W2`, and `W4` act separately on their respective input
+multipoles. For a general multipole-mixing window, apply its full matrix to the
+concatenated AP spectra using `window_convolution`.
+
+For cosmology gradients, construct `w0waCDMCosmology` **inside**
+the compiled function from its numerical arguments, then call `q_par_perp`.
+The upstream cosmology dataclass is not itself a PyTree. `apply_AP_check` is an
+eager SciPy reference, not a JIT/AD path. Other projection functions support JIT
+and reverse-mode differentiation; interpolation method and quadrature order are
+static choices.
+
+jaxace 0.7 is required. Older 0.5 releases produce NaN reverse-mode Akima
+derivatives on flat/zero multipole columns; the upstream fix is exercised by
+jaxeffort's projection tests.
+
+`get_Pl` and `get_Pl_jacobian` forward additional keyword arguments to the
+artifact's stochastic model. Numeric keyword values remain differentiable JAX
+inputs. The stochastic function must accept the requested names.
+
+The shipped artifacts match Effort.jl `reactant_dev` at `ea985a7`. Their
+`multipole_setup.json` selects canonical bias, analytical Jacobian and stochastic
+functions; `nn_setup.json` selects component postprocessing. Names may be flat or
+nested under `emulator_description`, as in Julia. Unknown configured names raise
+an error rather than silently falling back to stale artifact code. Legacy Python
+files remain supported when no name is configured.
+
+Both current velocileptors artifacts use bias order
+`[b1, b2, bs, b3, alpha0, alpha2, alpha4, alpha6, sn, sn2, sn4]`.
+The new REPT artifact has 69 k points instead of the old 80. Do not reuse windows
+or hard-coded grids from an older artifact without checking their coordinates.
+Canonical bias/Jacobian pairs are validated against both Julia fixtures and JAX AD.
 
 For a more detailed explanation, check the tutorial in the `notebooks` folder, which also shows a comparison with standard power spectrum calculations.
 

@@ -43,7 +43,7 @@ def get_test_biases():
 
 def get_test_biases_velocileptors():
     """Get standard galaxy bias parameters for Velocileptors (LPT and REPT)."""
-    # Velocileptors bias parameters: [b1, b2, b3, bs, alpha0, alpha2, alpha4, alpha6, sn, sn2, sn4]
+    # Canonical velocileptors order: [b1, b2, bs, b3, alpha0, alpha2, alpha4, alpha6, sn, sn2, sn4]
     return jnp.array([2.0, -1.0, 0.5, 0.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0])
 
 
