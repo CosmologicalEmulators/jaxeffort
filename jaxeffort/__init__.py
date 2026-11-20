@@ -18,10 +18,6 @@ from jaxeffort.jaxeffort import (
     MultipoleEmulators,
     load_multipole_emulator,
     load_component_emulator,
-    load_bias_combination,
-    load_jacobian_bias_combination,
-    load_preprocessing,
-    load_stoch_model,
     # Cosmology functions from jaxace (re-exported for convenience)
     w0waCDMCosmology,
     a_z,
@@ -37,11 +33,6 @@ from jaxeffort.jaxeffort import (
     dL_z,
     ρc_z,
     Ωtot_z,
-    F,
-    dFdy,
-    ΩνE2,
-    growth_solver,
-    growth_ode_system,
     # Neural network infrastructure from jaxace
     init_emulator,
     FlaxEmulator,
@@ -50,10 +41,8 @@ from jaxeffort.jaxeffort import (
 )
 
 from .projection import (
-    gausslobatto,
     q_par_perp,
     apply_AP,
-    apply_AP_check,
     window_convolution,
     ChebyshevOperator,
     prepare_chebyshev_operator,
@@ -149,15 +138,9 @@ __all__ = [
     # Loading functions
     "load_multipole_emulator",
     "load_component_emulator",
-    "load_bias_combination",
-    "load_jacobian_bias_combination",
-    "load_preprocessing",
-    "load_stoch_model",
     "q_par_perp",
     "apply_AP",
-    "apply_AP_check",
     "window_convolution",
-    "gausslobatto",
     "ChebyshevOperator",
     "prepare_chebyshev_operator",
     "apply_chebyshev_operator",
@@ -190,11 +173,6 @@ __all__ = [
     "dL_z",
     "ρc_z",
     "Ωtot_z",
-    "F",
-    "dFdy",
-    "ΩνE2",
-    "growth_solver",
-    "growth_ode_system",
     # Neural network infrastructure (from jaxace)
     "init_emulator",
     "FlaxEmulator",

@@ -9,7 +9,6 @@ import pytest
 
 from jaxeffort import (
     apply_AP,
-    apply_AP_check,
     apply_AP_and_window,
     apply_chebyshev_operator,
     prepare_ap_window_chebyshev,
@@ -18,7 +17,7 @@ from jaxeffort import (
     w0waCDMCosmology,
     window_convolution,
 )
-from jaxeffort.projection import gausslobatto
+from jaxeffort.projection import apply_AP_check, gausslobatto
 
 
 @pytest.mark.parametrize("degree", [0, -1])

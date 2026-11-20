@@ -88,10 +88,18 @@ concatenated AP spectra using `window_convolution`.
 
 For cosmology gradients, construct `w0waCDMCosmology` **inside**
 the compiled function from its numerical arguments, then call `q_par_perp`.
-The upstream cosmology dataclass is not itself a PyTree. `apply_AP_check` is an
+The upstream cosmology dataclass is not itself a PyTree. `jaxeffort.projection.apply_AP_check` is an
 eager SciPy reference, not a JIT/AD path. `apply_AP`, `window_convolution`,
 `apply_chebyshev_operator`, and `apply_AP_and_window` support JIT and reverse-mode
 differentiation; interpolation method and quadrature order are static choices.
+
+For diagnostics, import `apply_AP_check` and `gausslobatto` from `jaxeffort.projection`.
+The low-level artifact loaders (`load_bias_combination`, `load_jacobian_bias_combination`,
+`load_preprocessing`, `load_stoch_model`) remain in `jaxeffort.jaxeffort`; normal
+analyses can continue using the top-level `load_multipole_emulator`.
+The upstream neutrino and ODE helpers `F`, `dFdy`, `ΩνE2`, `growth_solver` and
+`growth_ode_system` are no longer part of jaxeffort. High-level growth queries
+(`D_z`, `f_z`, `D_f_z`) are unchanged.
 
 `prepare_chebyshev_operator` and `prepare_ap_window_chebyshev` are host-side setup:
 call them outside JIT with concrete domain bounds and an integer degree `K >= 1`.

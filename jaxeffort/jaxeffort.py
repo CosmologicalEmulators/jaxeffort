@@ -22,10 +22,6 @@ from jaxace.background import (
     D_z, f_z, D_f_z,
     r_z, dA_z, dL_z,
     ρc_z, Ωtot_z,
-    # Neutrino functions
-    F, dFdy, ΩνE2,
-    # Growth solver
-    growth_solver, growth_ode_system
 )
 
 # Import neural network infrastructure from jaxace

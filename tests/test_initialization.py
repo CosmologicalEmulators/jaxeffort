@@ -23,8 +23,18 @@ def test_public_exports():
     exec("from jaxeffort import *", namespace)
     for name in jaxeffort.__all__:
         assert namespace[name] is getattr(jaxeffort, name)
-    from jaxeffort import gausslobatto
-    assert gausslobatto is jaxeffort.projection.gausslobatto
+    removed = {"F", "dFdy", "ΩνE2", "growth_solver", "growth_ode_system"}
+    diagnostic = {"gausslobatto", "apply_AP_check"}
+    loaders = {"load_bias_combination", "load_jacobian_bias_combination",
+               "load_preprocessing", "load_stoch_model"}
+    for name in removed | diagnostic | loaders:
+        assert name not in namespace and not hasattr(jaxeffort, name)
+    for name in removed:
+        assert not hasattr(jaxeffort.jaxeffort, name)
+    for name in diagnostic:
+        assert callable(getattr(jaxeffort.projection, name))
+    for name in loaders:
+        assert callable(getattr(jaxeffort.jaxeffort, name))
 
 
 class TestNoAutoDownload:
