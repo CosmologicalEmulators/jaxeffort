@@ -11,6 +11,8 @@ from pathlib import Path
 from jaxeffort import (
     load_component_emulator,
     load_multipole_emulator,
+)
+from jaxeffort.jaxeffort import (
     load_preprocessing,
     load_bias_combination,
 )

@@ -2,33 +2,34 @@
 #
 # This file declares the available trained emulators for jaxeffort.
 # Compatible with Julia's Pkg.Artifacts system via pyartifacts.
+# URLs and checksums match Effort.jl reactant_dev at ea985a7.
 
 [pybird_mnuw0wacdm]
-git-tree-sha1 = "d309b571f5693718c8612d387820a409479fe50688d4c46c87ba8662c6acc09b"
+git-tree-sha1 = "abc6969ebefde319f3e62f986ca37d4fcf2f4cca88e98d6a24a9ffcbc647055d"
 lazy = true
 description = "PyBird emulator for massive neutrinos, w0wa CDM cosmology"
 has_noise = false
 
     [[pybird_mnuw0wacdm.download]]
-    url = "https://zenodo.org/records/17436464/files/trained_effort_pybird_mnuw0wacdm.tar.xz?download=1"
-    sha256 = "d309b571f5693718c8612d387820a409479fe50688d4c46c87ba8662c6acc09b"
+    url = "https://zenodo.org/records/20631625/files/trained_effort_pybird_mnuw0wacdm.tar.xz"
+    sha256 = "abc6969ebefde319f3e62f986ca37d4fcf2f4cca88e98d6a24a9ffcbc647055d"
 
 [velocileptors_lpt_mnuw0wacdm]
-git-tree-sha1 = "4f942141ecdfe8a71b03f514a47103fe9a5ae3e3c3b46963c7627b4e196ca579"
+git-tree-sha1 = "dffbb01c5383b393788190f2a16ebf79c763ec9ee31ff78bef08a7b473127690"
 lazy = true
 description = "Velocileptors LPT emulator for massive neutrinos, w0wa CDM cosmology"
 has_noise = false
 
     [[velocileptors_lpt_mnuw0wacdm.download]]
-    url = "https://zenodo.org/records/17635885/files/trained_effort_velocileptors_lpt_mnuw0wacdm.tar.xz?download=1"
-    sha256 = "4f942141ecdfe8a71b03f514a47103fe9a5ae3e3c3b46963c7627b4e196ca579"
+    url = "https://zenodo.org/records/20631626/files/trained_effort_velocileptors_lpt_mnuw0wacdm.tar.xz"
+    sha256 = "dffbb01c5383b393788190f2a16ebf79c763ec9ee31ff78bef08a7b473127690"
 
 [velocileptors_rept_mnuw0wacdm]
-git-tree-sha1 = "33dfa33b1191928198d17f263bae77621d8f46cff25281812cbc2cdddff092d9"
+git-tree-sha1 = "277386435d225b068ef3c35669febee03a12910a961f4507b1a2a8740d0d5fef"
 lazy = true
 description = "Velocileptors REPT emulator for massive neutrinos, w0wa CDM cosmology"
 has_noise = false
 
     [[velocileptors_rept_mnuw0wacdm.download]]
-    url = "https://zenodo.org/records/17635853/files/trained_effort_velocileptors_rept_mnuw0wacdm.tar.xz?download=1"
-    sha256 = "33dfa33b1191928198d17f263bae77621d8f46cff25281812cbc2cdddff092d9"
+    url = "https://zenodo.org/records/20631359/files/trained_effort_velocileptors_rept_mnuw0wacdm.tar.xz"
+    sha256 = "277386435d225b068ef3c35669febee03a12910a961f4507b1a2a8740d0d5fef"
